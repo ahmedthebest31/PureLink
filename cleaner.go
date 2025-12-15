@@ -5,37 +5,37 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 )
 
-// CleanText processes the input string to remove tracking parameters.
-// It returns the cleaned URL if modifications were made, otherwise returns the original string.
-// If unshorten is true, it attempts to resolve short links.
-func CleanText(input string, unshorten bool) string {
-	// 1. Check if the input is a valid URL
-	if !strings.HasPrefix(input, "http") {
+// CleanText determines if the input is a URL or a File Path and processes it accordingly.
+func CleanText(input string, unshorten bool, wslMode bool) string {
+	trimmed := strings.TrimSpace(input)
+
+	// 1. Path Detection
+	if isWindowsPath(trimmed) {
+		return processPath(trimmed, wslMode)
+	}
+
+	// 2. URL Cleaning (Standard Logic)
+	if !strings.HasPrefix(trimmed, "http") {
 		return input
 	}
 
-	finalURL := input
+	finalURL := trimmed
 
-	// 2. Unshorten logic (The X-Ray Feature)
-	// Only runs if the user enabled it in the menu.
-	if unshorten && isShortLink(input) {
-		resolved := resolveURL(input)
-		// Only update if we successfully got a different URL
-		if resolved != "" && resolved != input {
+	if unshorten && isShortLink(trimmed) {
+		resolved := resolveURL(trimmed)
+		if resolved != "" && resolved != trimmed {
 			finalURL = resolved
 		}
 	}
 
-	// 3. Cleaning logic (UTM and tracking params removal)
 	u, err := url.Parse(finalURL)
 	if err != nil {
-		// Return the unshortened URL even if parsing failed partially
 		return finalURL
 	}
 
-	// List of query parameters to remove
 	dirtyParams := []string{
 		"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
 		"fbclid", "si", "ref", "gclid", "share_id",
@@ -47,71 +47,101 @@ func CleanText(input string, unshorten bool) string {
 		q.Del(param)
 	}
 
-	// 4. Special handling for YouTube Shorts -> Watch format
-	// Converts /shorts/videoID to /watch?v=videoID for better accessibility.
 	if strings.Contains(u.Host, "youtube.com") && strings.Contains(u.Path, "/shorts/") {
 		videoID := strings.TrimPrefix(u.Path, "/shorts/")
 		u.Path = "/watch"
 		q.Set("v", videoID)
 	}
 
-	// Reconstruct the URL with cleaned parameters
 	u.RawQuery = q.Encode()
 	return u.String()
 }
 
-// resolveURL follows the redirect chain to find the destination.
+// processPath handles normalization and applies "Smart Quoting".
+func processPath(input string, wslMode bool) string {
+	// Step 1: Strip existing quotes to start fresh
+	clean := strings.Trim(input, "\"")
+	clean = strings.Trim(clean, "'")
+
+	// Step 2: Normalize slashes
+	clean = strings.ReplaceAll(clean, "\\", "/")
+
+	// Step 3: WSL Conversion
+	if wslMode {
+		if len(clean) > 1 && clean[1] == ':' {
+			drive := strings.ToLower(string(clean[0]))
+			remainder := clean[2:]
+			if !strings.HasPrefix(remainder, "/") {
+				remainder = "/" + remainder
+			}
+			clean = "/mnt/" + drive + remainder
+		}
+	}
+
+	// Step 4: Smart Quoting (The Professional Way)
+	// ONLY if the path contains a space, wrap the WHOLE path in quotes.
+	if strings.Contains(clean, " ") {
+		return "\"" + clean + "\""
+	}
+
+	// If no spaces, return raw path
+	return clean
+}
+
+// isWindowsPath checks for local file paths
+func isWindowsPath(s string) bool {
+	check := strings.Trim(s, "\"")
+	if len(check) < 2 {
+		return false
+	}
+	if unicode.IsLetter(rune(check[0])) && check[1] == ':' {
+		return true
+	}
+	if strings.HasPrefix(check, "\\\\") {
+		return true
+	}
+	return false
+}
+
+// resolveURL logic
 func resolveURL(shortURL string) string {
 	client := &http.Client{
-		// Timeout is set to 3 seconds to prevent the clipboard from hanging
 		Timeout: 3 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// Stop after 10 redirects to avoid infinite loops
 			if len(via) >= 10 {
 				return http.ErrUseLastResponse
 			}
 			return nil
 		},
 	}
-
-	// Use HEAD request first to fetch headers only (saves bandwidth)
 	resp, err := client.Head(shortURL)
 	if err != nil {
-		// Fallback to GET if HEAD fails (some servers block HEAD requests)
 		resp, err = client.Get(shortURL)
 		if err != nil {
 			return ""
 		}
 	}
 	defer resp.Body.Close()
-
-	// Return the final URL
 	return resp.Request.URL.String()
 }
 
-// isShortLink checks if the domain is a known shortener or if the URL length is short.
+// isShortLink detection
 func isShortLink(input string) bool {
 	u, err := url.Parse(input)
 	if err != nil {
 		return false
 	}
-
-	// Explicit list of common URL shorteners
 	shorteners := []string{
 		"bit.ly", "goo.gl", "t.co", "tinyurl.com", "is.gd",
 		"buff.ly", "amzn.to", "lnkd.in", "rebrand.ly", "shrtco.de",
 	}
-
 	for _, s := range shorteners {
 		if u.Host == s || strings.HasSuffix(u.Host, s) {
 			return true
 		}
 	}
-
-	// Aggressive check: If URL is short (less than 30 chars) and not local, treat as potential short link.
 	if len(input) < 30 && !strings.Contains(u.Host, "localhost") && !strings.Contains(u.Host, "127.0.0.1") {
 		return true
 	}
-
 	return false
 }

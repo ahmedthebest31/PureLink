@@ -10,7 +10,6 @@ import (
 	"github.com/getlantern/systray"
 )
 
-// Windows API definitions
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
@@ -27,7 +26,6 @@ const (
 )
 
 func main() {
-	// Single Instance Lock
 	_, _, err := procCreateMutex.Call(
 		0,
 		1,
@@ -46,29 +44,32 @@ func onReady() {
 	systray.SetTitle("PureLink")
 	systray.SetTooltip("PureLink Privacy Guard")
 
-	// --- Menu Layout ---
 	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
-	mCounter := systray.AddMenuItem("Cleaned: 0 Links", "Total links cleaned this session")
+	mCounter := systray.AddMenuItem("Cleaned: 0 Links", "Total items processed")
 	
 	systray.AddSeparator()
 
-	// New Feature: Unshorten Checkbox
-	// Default is false (OFF) to save internet, user can enable it.
-	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand bit.ly and t.co links (Requires Internet)", false)
+	// Feature Controls
+	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", false)
+	
+	// NEW: WSL Mode Checkbox
+	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", false)
 
-	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when link is cleaned", true)
+	systray.AddSeparator()
+
+	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", true)
 	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
 
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
 
-	// App State
+	// State
 	isRunning := true
 	isSoundEnabled := true
 	isUnshortenEnabled := false
+	isWSLMode := false // Default OFF (Standard Windows Paths)
 	cleanedCount := 0
 
-	// --- Background Worker ---
 	go func() {
 		lastText, _ := clipboard.ReadAll()
 		for {
@@ -80,15 +81,15 @@ func onReady() {
 			text, err := clipboard.ReadAll()
 			if err == nil && text != "" && text != lastText {
 				
-				// Pass the unshorten flag to the cleaner
-				cleaned := CleanText(text, isUnshortenEnabled)
+				// Pass both flags: Unshorten AND WSL Mode
+				cleaned := CleanText(text, isUnshortenEnabled, isWSLMode)
 
 				if cleaned != text {
 					clipboard.WriteAll(cleaned)
 					lastText = cleaned
 					
 					cleanedCount++
-					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Links", cleanedCount))
+					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", cleanedCount))
 
 					if isSoundEnabled {
 						nativeBeep()
@@ -101,7 +102,6 @@ func onReady() {
 		}
 	}()
 
-	// --- Event Handler ---
 	go func() {
 		for {
 			select {
@@ -136,8 +136,18 @@ func onReady() {
 				} else {
 					isUnshortenEnabled = true
 					mUnshorten.Check()
-					// Feedback beep to confirm mode change
 					nativeBeep() 
+				}
+
+			// Handle WSL Toggle
+			case <-mWSL.ClickedCh:
+				if isWSLMode {
+					isWSLMode = false
+					mWSL.Uncheck()
+				} else {
+					isWSLMode = true
+					mWSL.Check()
+					nativeBeep()
 				}
 			}
 		}
