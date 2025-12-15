@@ -10,7 +10,7 @@ import (
 	"github.com/getlantern/systray"
 )
 
-// Windows API definitions for native interactions (Sound, MessageBox, Mutex)
+// Windows API definitions
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
@@ -27,21 +27,18 @@ const (
 )
 
 func main() {
-	// 1. Single Instance Check using Named Mutex
-	// This prevents the application from running multiple times.
+	// Single Instance Lock
 	_, _, err := procCreateMutex.Call(
 		0,
 		1,
 		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("Global\\PureLinkInstanceLock"))),
 	)
 
-	// If the mutex already exists, it means an instance is running.
 	if err.(syscall.Errno) == ERROR_ALREADY_EXISTS {
 		showNativeError("PureLink is already running!", "Error")
-		return // Terminate the new instance
+		return
 	}
 
-	// 2. Initialize the System Tray UI
 	systray.Run(onReady, onExit)
 }
 
@@ -50,56 +47,49 @@ func onReady() {
 	systray.SetTooltip("PureLink Privacy Guard")
 
 	// --- Menu Layout ---
-
-	// 1. Status Indicator (Disabled item, just for display like AdGuard)
 	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
-
-	// 2. Statistics Counter
 	mCounter := systray.AddMenuItem("Cleaned: 0 Links", "Total links cleaned this session")
-
+	
 	systray.AddSeparator()
 
-	// 3. Sound Control
-	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when link is cleaned", true)
+	// New Feature: Unshorten Checkbox
+	// Default is false (OFF) to save internet, user can enable it.
+	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand bit.ly and t.co links (Requires Internet)", false)
 
-	// 4. Pause/Resume Control
+	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when link is cleaned", true)
 	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
 
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
 
-	// Application State
+	// App State
 	isRunning := true
 	isSoundEnabled := true
+	isUnshortenEnabled := false
 	cleanedCount := 0
 
-	// --- Clipboard Watcher (Background Goroutine) ---
+	// --- Background Worker ---
 	go func() {
 		lastText, _ := clipboard.ReadAll()
 		for {
-			// If paused, skip processing to save resources
 			if !isRunning {
 				time.Sleep(1 * time.Second)
 				continue
 			}
 
 			text, err := clipboard.ReadAll()
-			// Process only if text has changed and is valid
 			if err == nil && text != "" && text != lastText {
-
-				// Call the cleaning logic from cleaner.go
-				cleaned := CleanText(text)
+				
+				// Pass the unshorten flag to the cleaner
+				cleaned := CleanText(text, isUnshortenEnabled)
 
 				if cleaned != text {
-					// Update clipboard with cleaned URL
 					clipboard.WriteAll(cleaned)
 					lastText = cleaned
-
-					// Update UI Counter
+					
 					cleanedCount++
 					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Links", cleanedCount))
 
-					// Provide Audio Feedback
 					if isSoundEnabled {
 						nativeBeep()
 					}
@@ -107,12 +97,11 @@ func onReady() {
 					lastText = text
 				}
 			}
-			// Poll interval (500ms is a good balance for responsiveness/CPU)
 			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 
-	// --- Event Loop (Handle Menu Clicks) ---
+	// --- Event Handler ---
 	go func() {
 		for {
 			select {
@@ -137,21 +126,26 @@ func onReady() {
 				} else {
 					isSoundEnabled = true
 					mSound.Check()
-					nativeBeep() // Test sound on enable
+					nativeBeep()
+				}
+
+			case <-mUnshorten.ClickedCh:
+				if isUnshortenEnabled {
+					isUnshortenEnabled = false
+					mUnshorten.Uncheck()
+				} else {
+					isUnshortenEnabled = true
+					mUnshorten.Check()
+					// Feedback beep to confirm mode change
+					nativeBeep() 
 				}
 			}
 		}
 	}()
 }
 
-func onExit() {
-	// Cleanup tasks (if any)
-}
+func onExit() {}
 
-// --- Native Helper Functions ---
-
-// showNativeError displays a native Windows MessageBox.
-// Essential for accessibility as screen readers announce standard dialogs immediately.
 func showNativeError(text, title string) {
 	procMessageBox.Call(
 		0,
@@ -161,8 +155,6 @@ func showNativeError(text, title string) {
 	)
 }
 
-// nativeBeep plays the system default sound using Win32 API.
-// Lightweight alternative to external audio libraries.
 func nativeBeep() {
 	procMessageBeep.Call(0xFFFFFFFF)
 }
