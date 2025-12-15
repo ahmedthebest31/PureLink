@@ -49,10 +49,19 @@ func onReady() {
 	
 	systray.AddSeparator()
 
-	// Feature Controls
-	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", false)
+	// --- Tools Submenu ---
+	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
 	
-	// NEW: WSL Mode Checkbox
+	// Added items directly without separators inside the submenu (Library limitation)
+	tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
+	tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
+	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
+	tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
+	tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
+
+	systray.AddSeparator()
+
+	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", false)
 	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", false)
 
 	systray.AddSeparator()
@@ -67,9 +76,10 @@ func onReady() {
 	isRunning := true
 	isSoundEnabled := true
 	isUnshortenEnabled := false
-	isWSLMode := false // Default OFF (Standard Windows Paths)
+	isWSLMode := false
 	cleanedCount := 0
 
+	// --- Background Watcher ---
 	go func() {
 		lastText, _ := clipboard.ReadAll()
 		for {
@@ -81,7 +91,6 @@ func onReady() {
 			text, err := clipboard.ReadAll()
 			if err == nil && text != "" && text != lastText {
 				
-				// Pass both flags: Unshorten AND WSL Mode
 				cleaned := CleanText(text, isUnshortenEnabled, isWSLMode)
 
 				if cleaned != text {
@@ -102,6 +111,7 @@ func onReady() {
 		}
 	}()
 
+	// --- Event Handler ---
 	go func() {
 		for {
 			select {
@@ -136,10 +146,9 @@ func onReady() {
 				} else {
 					isUnshortenEnabled = true
 					mUnshorten.Check()
-					nativeBeep() 
+					nativeBeep()
 				}
 
-			// Handle WSL Toggle
 			case <-mWSL.ClickedCh:
 				if isWSLMode {
 					isWSLMode = false
@@ -149,6 +158,47 @@ func onReady() {
 					mWSL.Check()
 					nativeBeep()
 				}
+			
+			// --- Tools Actions ---
+			
+			case <-tWhatsApp.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				url, err := GetWhatsAppLink(text)
+				if err == nil {
+					clipboard.WriteAll(url)
+					OpenBrowser(url)
+					nativeBeep()
+				}
+
+			case <-tTelegram.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				url, err := GetTelegramLink(text)
+				if err == nil {
+					clipboard.WriteAll(url)
+					OpenBrowser(url)
+					nativeBeep()
+				}
+
+			case <-tDecode64.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				decoded, err := DecodeBase64(text)
+				if err == nil && decoded != "" {
+					clipboard.WriteAll(decoded)
+					nativeBeep()
+				}
+			
+			case <-tEncode64.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				if text != "" {
+					encoded := EncodeBase64(text)
+					clipboard.WriteAll(encoded)
+					nativeBeep()
+				}
+
+			case <-tUUID.ClickedCh:
+				id := GenerateUUID()
+				clipboard.WriteAll(id)
+				nativeBeep()
 			}
 		}
 	}()

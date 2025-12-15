@@ -1,0 +1,36 @@
+name: Release Builder
+
+on:
+  push:
+    tags:
+      - 'v*' # يشتغل لما ترفع تاج يبدأ بحرف v
+
+jobs:
+  build-and-release:
+    name: Build for Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install Dependencies
+        run: go mod tidy
+
+      - name: Build Binary
+        # هنا بنسمي الملف باسم الإصدار ونظبط الـ Flags لتقليل الحجم
+        run: |
+          $VERSION = $env:GITHUB_REF_NAME
+          go build -ldflags "-s -w -H=windowsgui" -o "PureLink-${VERSION}-Windows.exe"
+
+      - name: Create Release & Upload
+        uses: softprops/action-gh-release@v1
+        with:
+          files: PureLink-*-Windows.exe
+          generate_release_notes: true # بيكتب وصف أوتوماتيك بناء على الـ Commits
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

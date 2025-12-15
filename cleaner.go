@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-// CleanText determines if the input is a URL or a File Path and processes it accordingly.
+// CleanText processes input for Privacy, Cloud links, and Path normalization.
 func CleanText(input string, unshorten bool, wslMode bool) string {
 	trimmed := strings.TrimSpace(input)
 
@@ -17,13 +17,14 @@ func CleanText(input string, unshorten bool, wslMode bool) string {
 		return processPath(trimmed, wslMode)
 	}
 
-	// 2. URL Cleaning (Standard Logic)
+	// 2. URL Cleaning
 	if !strings.HasPrefix(trimmed, "http") {
 		return input
 	}
 
 	finalURL := trimmed
 
+	// Unshorten logic
 	if unshorten && isShortLink(trimmed) {
 		resolved := resolveURL(trimmed)
 		if resolved != "" && resolved != trimmed {
@@ -36,6 +37,7 @@ func CleanText(input string, unshorten bool, wslMode bool) string {
 		return finalURL
 	}
 
+	// Remove tracking parameters
 	dirtyParams := []string{
 		"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
 		"fbclid", "si", "ref", "gclid", "share_id",
@@ -47,26 +49,40 @@ func CleanText(input string, unshorten bool, wslMode bool) string {
 		q.Del(param)
 	}
 
+	// Fix YouTube Shorts
 	if strings.Contains(u.Host, "youtube.com") && strings.Contains(u.Path, "/shorts/") {
 		videoID := strings.TrimPrefix(u.Path, "/shorts/")
 		u.Path = "/watch"
 		q.Set("v", videoID)
 	}
 
+	// 3. Cloud Booster (Dropbox & Google Drive)
+	// Automatically convert to direct download links
+	if strings.Contains(u.Host, "dropbox.com") {
+		q.Set("dl", "1")
+	} else if strings.Contains(u.Host, "drive.google.com") && strings.Contains(u.Path, "/view") {
+		// Convert /file/d/ID/view -> /uc?export=download&id=ID
+		parts := strings.Split(u.Path, "/")
+		for i, part := range parts {
+			if part == "d" && i+1 < len(parts) {
+				id := parts[i+1]
+				u.Path = "/uc"
+				q.Set("export", "download")
+				q.Set("id", id)
+				break
+			}
+		}
+	}
+
 	u.RawQuery = q.Encode()
 	return u.String()
 }
 
-// processPath handles normalization and applies "Smart Quoting".
 func processPath(input string, wslMode bool) string {
-	// Step 1: Strip existing quotes to start fresh
 	clean := strings.Trim(input, "\"")
 	clean = strings.Trim(clean, "'")
-
-	// Step 2: Normalize slashes
 	clean = strings.ReplaceAll(clean, "\\", "/")
 
-	// Step 3: WSL Conversion
 	if wslMode {
 		if len(clean) > 1 && clean[1] == ':' {
 			drive := strings.ToLower(string(clean[0]))
@@ -78,17 +94,13 @@ func processPath(input string, wslMode bool) string {
 		}
 	}
 
-	// Step 4: Smart Quoting (The Professional Way)
-	// ONLY if the path contains a space, wrap the WHOLE path in quotes.
+	// Smart Quoting
 	if strings.Contains(clean, " ") {
 		return "\"" + clean + "\""
 	}
-
-	// If no spaces, return raw path
 	return clean
 }
 
-// isWindowsPath checks for local file paths
 func isWindowsPath(s string) bool {
 	check := strings.Trim(s, "\"")
 	if len(check) < 2 {
@@ -103,7 +115,6 @@ func isWindowsPath(s string) bool {
 	return false
 }
 
-// resolveURL logic
 func resolveURL(shortURL string) string {
 	client := &http.Client{
 		Timeout: 3 * time.Second,
@@ -125,7 +136,6 @@ func resolveURL(shortURL string) string {
 	return resp.Request.URL.String()
 }
 
-// isShortLink detection
 func isShortLink(input string) bool {
 	u, err := url.Parse(input)
 	if err != nil {
