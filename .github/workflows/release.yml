@@ -3,7 +3,10 @@ name: Release Builder
 on:
   push:
     tags:
-      - 'v*' # يشتغل لما ترفع تاج يبدأ بحرف v
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
@@ -22,15 +25,11 @@ jobs:
         run: go mod tidy
 
       - name: Build Binary
-        # هنا بنسمي الملف باسم الإصدار ونظبط الـ Flags لتقليل الحجم
         run: |
-          $VERSION = $env:GITHUB_REF_NAME
-          go build -ldflags "-s -w -H=windowsgui" -o "PureLink-${VERSION}-Windows.exe"
+          go build -ldflags "-s -w -H=windowsgui" -o "PureLink-${{ github.ref_name }}-Windows.exe"
 
-      - name: Create Release & Upload
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: PureLink-*-Windows.exe
-          generate_release_notes: true # بيكتب وصف أوتوماتيك بناء على الـ Commits
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true

@@ -1,25 +1,27 @@
 # PureLink 🛡️
 
-**PureLink** is a privacy-focused, native Windows utility designed for developers and power users. It sanitizes clipboard links, unshortens URLs, and bridges the gap between Windows paths and WSL (Linux) terminals.
+**PureLink** is a privacy-focused, native Windows utility designed for developers and power users. It sanitizes clipboard links, auto-converts cloud storage links, and bridges the gap between Windows paths and WSL.
 
 ![OS](https://img.shields.io/badge/OS-Windows-blue) ![Go](https://img.shields.io/badge/Built%20with-Go-00ADD8) ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## ✨ Features
 
-### 🛡️ Privacy & Security
-- **Smart Cleaner:** Instantly strips tracking parameters (`utm_*`, `fbclid`, `gclid`, etc.).
+### 🛡️ Smart Cleaning (Automatic)
+- **Tracker Remover:** Strips `utm_*`, `fbclid`, `gclid`, and other tracking parameters instantly.
+- **Cloud Booster:** Automatically converts **Dropbox** and **Google Drive** links to direct download links (e.g., `dl=1`).
 - **X-Ray Mode:** Resolves short links (e.g., `bit.ly`, `t.co`) to their destination *before* you paste.
-- **YouTube Fix:** Converts Shorts (`/shorts/`) to standard watch URLs for better accessibility.
+- **YouTube Fix:** Converts Shorts (`/shorts/`) to standard watch URLs.
 
-### 🐧 Developer Productivity
+### 🛠️ Developer Tools (Manual Menu)
+Right-click the tray icon to access the **Tools** menu:
+- **Open WhatsApp:** Copies a number and opens the chat directly (Handles International formats).
+- **Open Telegram:** Copies a username and opens the profile.
+- **Base64 Ops:** Encode or Decode Base64 strings directly in the clipboard.
+- **Insert UUID:** Generates a fresh v4 UUID and copies it.
+
+### 🐧 Productivity
 - **WSL Bridge:** Toggle "WSL Mode" to convert `C:\Projects` to `/mnt/c/Projects` automatically.
-- **Smart Quoting:** Intelligent handling of file paths—only adds quotes if the path contains spaces.
 - **Path Normalizer:** Fixes backslashes `\` to universal forward slashes `/`.
-
-### 🚀 Native Performance
-- **Zero-Config:** Runs silently in the System Tray.
-- **Tiny Footprint:** Native Win32 API implementation (< 5MB RAM).
-- **Single Instance:** Prevents multiple copies from running.
 
 ## 📦 Installation
 
@@ -28,24 +30,36 @@
 2. Download the latest `PureLink-vX.X.X-Windows.exe`.
 3. Run it! (Optional: Add shortcut to Startup folder).
 
-### Option 2: Install via Go (For Developers)
-If you have Go installed, you can compile and install directly:
-
+### Option 2: Install via Go
 ```bash
-go install [github.com/ahmedthebest31/PureLink@latest](https://github.com/ahmedthebest31/PureLink@latest)
+go install https://github.com/ahmedthebest31/PureLink@latest
 ```
 
 Note: Requires a Windows environment.
 
 
 ### 🛠️ Usage
+
 1. Run the application. An icon will appear in the System Tray.
-2. Right-Click the icon to configure:
+2. **Right-Click** the icon to access features:
 
-- [x] Unshorten Links: Enable to expand short URLs (Requires Internet).
-- [x] WSL Path Mode: Enable to convert Windows paths to Linux/WSL format.
-- Just Copy (Ctrl+C). PureLink handles the rest.
+   **🧰 Tools Menu (Manual Utilities):**
+   - **Open WhatsApp:** Detects phone numbers (International format), copies the link, and opens the chat.
+   - **Open Telegram:** Detects usernames, copies the link, and opens the profile.
+   - **Base64 Ops:** Encode or Decode Base64 strings directly in the clipboard.
+   - **Insert UUID:** Generates a fresh v4 UUID and copies it.
 
+   **⚙️ Settings (Toggles):**
+   - `[x] Unshorten Links`: Enable to expand short URLs (Requires Internet).
+   - `[x] WSL Path Mode`: Enable to convert Windows paths to Linux/WSL format.
+
+3. **Just Copy (Ctrl+C)**. PureLink handles tracking removal, path normalization, and cloud link boosting (Dropbox/Drive) automatically in the background.
+
+### 🤝 Contributing
+Contributions are welcome! Please note that this version utilizes `syscall` for Windows native features.
+
+### 📄 License
+MIT License
 ### 🤝 Contributing
 Contributions are welcome! Please note that this version utilizes syscall for Windows native features.
 
