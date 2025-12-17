@@ -59,11 +59,5 @@ Note: Requires a Windows environment.
 Contributions are welcome! Please note that this version utilizes `syscall` for Windows native features.
 
 ### 📄 License
-MIT License
-### 🤝 Contributing
-Contributions are welcome! Please note that this version utilizes syscall for Windows native features.
 
-
-### 📄 License
-
-MIT License
+[MIT License](LICENSE)
