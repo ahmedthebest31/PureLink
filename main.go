@@ -281,15 +281,27 @@ func onReady() {
 
 						cfg.TotalCleaned++
 
-						// Update History
+												// Update History: Move-to-Front Deduplication
 
-						cfg.History = append([]string{cleaned}, cfg.History...)
+												var newHistory []string
 
-						if len(cfg.History) > 5 {
+												for _, item := range cfg.History {
 
-							cfg.History = cfg.History[:5]
+													if item != cleaned {
 
-						}
+														newHistory = append(newHistory, item)
+
+													}
+
+												}
+
+												cfg.History = append([]string{cleaned}, newHistory...)
+
+												if len(cfg.History) > 5 {
+
+													cfg.History = cfg.History[:5]
+
+												}
 
 						SaveConfig(cfg) // Auto-save on count change
 
