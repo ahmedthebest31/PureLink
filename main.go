@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed" // New import, used for //go:embed directive
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/sqweek/dialog"
 )
+
+//go:embed icon.png
+var iconData []byte
 
 func main() {
 	lockFile := filepath.Join(os.TempDir(), "purelink.lock")
@@ -34,6 +38,7 @@ func main() {
 }
 
 func onReady() {
+	systray.SetIcon(iconData) // Set tray icon
 	systray.SetTitle("PureLink")
 	systray.SetTooltip("PureLink Privacy Guard")
 
