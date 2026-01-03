@@ -1,69 +1,83 @@
-# PureLink 🛡️
+# PureLink 🚀
 
-**PureLink** is a privacy-focused, native Windows utility designed for developers and power users. It sanitizes clipboard links, auto-converts cloud storage links, and bridges the gap between Windows paths and WSL.
+[![Go Report Card](https://goreportcard.com/badge/github.com/ahmedthebest31/PureLink)](https://goreportcard.com/report/github.com/ahmedthebest31/PureLink)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ahmedthebest31/PureLink?label=Version&color=blue)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
 
-![OS](https://img.shields.io/badge/OS-Windows-blue) ![Go](https://img.shields.io/badge/Built%20with-Go-00ADD8) ![License](https://img.shields.io/badge/License-MIT-green)
+The native privacy guard and clipboard manager for developers. Now runs everywhere.
+
+---
 
 ## ✨ Features
 
-### 🛡️ Smart Cleaning (Automatic)
-- **Tracker Remover:** Strips `utm_*`, `fbclid`, `gclid`, and other tracking parameters instantly.
-- **Cloud Booster:** Automatically converts **Dropbox** and **Google Drive** links to direct download links (e.g., `dl=1`).
-- **X-Ray Mode:** Resolves short links (e.g., `bit.ly`, `t.co`) to their destination *before* you paste.
-- **YouTube Fix:** Converts Shorts (`/shorts/`) to standard watch URLs.
+PureLink offers a powerful suite of tools to enhance your privacy and boost your developer productivity across platforms.
 
-### 🛠️ Developer Tools (Manual Menu)
-Right-click the tray icon to access the **Tools** menu:
-- **Open WhatsApp:** Copies a number and opens the chat directly (Handles International formats).
-- **Open Telegram:** Copies a username and opens the profile.
-- **Base64 Ops:** Encode or Decode Base64 strings directly in the clipboard.
-- **Insert UUID:** Generates a fresh v4 UUID and copies it.
+*   🌍 **Cross-Platform**: Works seamlessly on **Windows**, **Linux**, and **macOS**.
+*   🔄 **Live Updates**: Fetches the latest tracking filter rules from GitHub instantly, keeping your protection up-to-date.
+*   📜 **History**: Keeps track of your last 5 cleaned links, easily accessible from the system tray menu.
+*   🚀 **Launch on Startup**: Option to automatically launch PureLink when you log in, ensuring continuous protection.
+*   🛡️ **Privacy Guard**: Strips common tracking parameters (e.g., `utm_*`, `fbclid`, `gclid`) from links copied to your clipboard, locally and instantly.
+*   🔗 **Productivity Boost**:
+    *   **Unshorten Links**: Automatically resolves shortened URLs (e.g., `bit.ly`, `t.co`) to their original destination.
+    *   **Direct Cloud Links**: Converts Dropbox and Google Drive shareable links into direct download links.
+    *   **WSL Bridge**: (Maintain from previous version) Toggle "WSL Mode" to convert `C:\Projects` to `/mnt/c/Projects` automatically.
+    *   **Path Normalizer**: (Maintain from previous version) Fixes backslashes `\` to universal forward slashes `/`.
 
-### 🐧 Productivity
-- **WSL Bridge:** Toggle "WSL Mode" to convert `C:\Projects` to `/mnt/c/Projects` automatically.
-- **Path Normalizer:** Fixes backslashes `\` to universal forward slashes `/`.
+---
 
 ## 📦 Installation
 
-### Option 1: Download Binary (Recommended)
-1. Go to the [Releases Page](https://github.com/ahmedthebest31/PureLink/releases).
-2. Download the latest `PureLink-vX.X.X-Windows.exe`.
-3. Run it! (Optional: Add shortcut to Startup folder).
+PureLink is easy to install on any supported platform.
 
-### Option 2: Install via Go
+### Option 1: Go Install (Universal)
+If you have Go installed, you can get PureLink directly from the source:
+
 ```bash
-go install https://github.com/ahmedthebest31/PureLink@latest
+go install github.com/ahmedthebest31/PureLink@latest
 ```
 
-Note: Requires a Windows environment.
+This will compile and install the latest version of PureLink to your `$GOPATH/bin` (or `$HOME/go/bin`) directory.
 
+### Option 2: Download Binaries (Recommended)
+Pre-compiled binaries for Windows, Linux, and macOS are available on the GitHub Releases page:
 
-### 🛠️ Usage
+1.  Go to the [PureLink Releases page](https://github.com/ahmedthebest31/PureLink/releases).
+2.  Download the appropriate binary for your operating system.
+3.  Execute the downloaded file.
 
-1. Run the application. An icon will appear in the System Tray.
-2. **Right-Click** the icon to access features:
+---
 
-   **🧰 Tools Menu (Manual Utilities):**
-   - **Open WhatsApp:** Detects phone numbers (International format), copies the link, and opens the chat.
-   - **Open Telegram:** Detects usernames, copies the link, and opens the profile.
-   - **Base64 Ops:** Encode or Decode Base64 strings directly in the clipboard.
-   - **Insert UUID:** Generates a fresh v4 UUID and copies it.
+## 🚀 Usage
 
-   **⚙️ Settings (Toggles):**
-   - `[x] Unshorten Links`: Enable to expand short URLs (Requires Internet).
-   - `[x] WSL Path Mode`: Enable to convert Windows paths to Linux/WSL format.
+Once launched, PureLink runs quietly in your system tray (or notification area).
 
-3. **Just Copy (Ctrl+C)**. PureLink handles tracking removal, path normalization, and cloud link boosting (Dropbox/Drive) automatically in the background.
+**Right-Click the PureLink Tray Icon to access the menu:**
 
-### 🤝 Contributing
-Contributions are welcome! Please note that this version utilizes `syscall` for Windows native features.
+*   **Settings**: Configure preferences like enabling/disabling features (e.g., Unshorten Links, WSL Path Mode, Launch on Startup, Sound).
+*   **Recent History**: View and re-copy your last 5 cleaned links.
+*   **Tools Menu (Manual Utilities)**:
+    *   **Open WhatsApp**: Copies a number and opens the chat directly (Handles International formats).
+    *   **Open Telegram**: Copies a username and opens the profile.
+    *   **Base64 Ops**: Encode or Decode Base64 strings directly in the clipboard.
+    *   **Insert UUID**: Generates a fresh v4 UUID and copies it.
 
-### 📄 License
+PureLink continuously monitors your clipboard in the background. Simply **copy a link (Ctrl+C)**, and PureLink will automatically sanitize it, unshorten it, or convert it based on your settings.
+
+---
+
+## 🌍 Ecosystem
+
+### Mobile Companion
+For on-the-go privacy protection, check out the Android version of PureLink:
+
+[![PureLink Android](https://img.shields.io/badge/PureLink-Android-green)](https://github.com/ahmedthebest31/PureLink-Android)
+[PureLink-Android](https://github.com/ahmedthebest31/PureLink-Android)
+
+---
+
+## 📄 License
 MIT License
-### 🤝 Contributing
+
+## 🤝 Contributing
 Contributions are welcome! Please note that this version utilizes syscall for Windows native features.
-
-
-### 📄 License
-
-MIT License
