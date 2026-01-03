@@ -1,0 +1,24 @@
+{
+  "blocklist": [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "fbclid",
+    "si",
+    "ref",
+    "gclid",
+    "gclsrc",
+    "dclid",
+    "msclkid",
+    "mc_eid",
+    "_ga",
+    "yclid",
+    "vero_conv",
+    "vero_id",
+    "wickedid",
+    "share_id",
+    "igshid"
+  ]
+}

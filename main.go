@@ -35,30 +35,35 @@ func onReady() {
 	systray.SetTitle("PureLink")
 	systray.SetTooltip("PureLink Privacy Guard")
 
-	// Load Config
-	cfg, err := LoadConfig()
-	if err != nil {
-		fmt.Println("Error loading config:", err)
-		// cfg is already initialized with defaults even on error in LoadConfig
-	}
-
-	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
-	mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
+		// Load Config
+		cfg, err := LoadConfig()
+		if err != nil {
+			fmt.Println("Error loading config:", err)
+		}
 	
-systray.AddSeparator()
-
-	// --- Tools Submenu ---
-	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
+		// Load Rules
+		if err := LoadRules(); err != nil {
+			fmt.Println("Error loading rules:", err)
+		}
 	
-	// Added items directly without separators inside the submenu (Library limitation)
-	tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
-	tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
-	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
-	tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
-	tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
-
-	systray.AddSeparator()
-
+		systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
+		mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
+		
+		systray.AddSeparator()
+	
+			// --- Tools Submenu ---
+			mTools := systray.AddMenuItem("Tools", "Manual Utilities")
+			
+			// Added items directly without separators inside the submenu (Library limitation)
+			mUpdate := mTools.AddSubMenuItem("Check for Filter Updates", "Download latest tracking rules")
+		
+			tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
+			tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
+		tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
+		tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
+		tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
+	
+		systray.AddSeparator()
 	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", cfg.Unshorten)
 	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", cfg.WSLMode)
 	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", cfg.DirectLink)
@@ -171,6 +176,15 @@ systray.AddSeparator()
 			
 			// --- Tools Actions ---
 			
+			case <-mUpdate.ClickedCh:
+				err := UpdateFilters()
+				if err != nil {
+					dialog.Message("Update failed: %v", err).Title("Error").Error()
+				} else {
+					dialog.Message("Filters updated successfully!").Title("Success").Info()
+					NotifyBeep()
+				}
+
 			case <-tWhatsApp.ClickedCh:
 				text, _ := clipboard.ReadAll()
 				url, err := GetWhatsAppLink(text)

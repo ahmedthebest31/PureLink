@@ -37,15 +37,13 @@ func CleanText(input string, unshorten bool, wslMode bool, cloudBoost bool) stri
 		return finalURL
 	}
 
-	// Remove tracking parameters
-	dirtyParams := []string{
-		"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-		"fbclid", "si", "ref", "gclid", "share_id",
-		"igshid", "_ga", "yclid", "mc_eid",
-	}
+	// Remove tracking parameters using dynamic blocklist
+	BlocklistLock.RLock()
+	currentParams := ActiveBlocklist
+	BlocklistLock.RUnlock()
 
 	q := u.Query()
-	for _, param := range dirtyParams {
+	for _, param := range currentParams {
 		q.Del(param)
 	}
 
