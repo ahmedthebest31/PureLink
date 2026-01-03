@@ -2,40 +2,31 @@ package main
 
 import (
 	"fmt"
-	"syscall"
+	"os"
+	"path/filepath"
 	"time"
-	"unsafe"
 
 	"github.com/atotto/clipboard"
 	"github.com/getlantern/systray"
-)
-
-var (
-	user32   = syscall.NewLazyDLL("user32.dll")
-	kernel32 = syscall.NewLazyDLL("kernel32.dll")
-
-	procCreateMutex  = kernel32.NewProc("CreateMutexW")
-	procMessageBox   = user32.NewProc("MessageBoxW")
-	procMessageBeep  = user32.NewProc("MessageBeep")
-)
-
-const (
-	ERROR_ALREADY_EXISTS = 183
-	MB_ICONERROR         = 0x00000010
-	MB_OK                = 0x00000000
+	"github.com/gofrs/flock"
+	"github.com/sqweek/dialog"
 )
 
 func main() {
-	_, _, err := procCreateMutex.Call(
-		0,
-		1,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("Global\\PureLinkInstanceLock"))),
-	)
+	lockFile := filepath.Join(os.TempDir(), "purelink.lock")
+	fileLock := flock.New(lockFile)
 
-	if err.(syscall.Errno) == ERROR_ALREADY_EXISTS {
-		showNativeError("PureLink is already running!", "Error")
+	locked, err := fileLock.TryLock()
+	if err != nil {
+		dialog.Message("Error checking instance lock: %v", err).Title("Error").Error()
 		return
 	}
+
+	if !locked {
+		dialog.Message("PureLink is already running!").Title("Error").Error()
+		return
+	}
+	defer fileLock.Unlock()
 
 	systray.Run(onReady, onExit)
 }
@@ -54,7 +45,7 @@ func onReady() {
 	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
 	mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
 	
-	systray.AddSeparator()
+systray.AddSeparator()
 
 	// --- Tools Submenu ---
 	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
@@ -106,7 +97,7 @@ func onReady() {
 					SaveConfig(cfg) // Auto-save on count change
 
 					if cfg.Sound {
-						nativeBeep()
+						NotifyBeep()
 					}
 				} else {
 					lastText = text
@@ -141,7 +132,7 @@ func onReady() {
 				} else {
 					cfg.Sound = true
 					mSound.Check()
-					nativeBeep()
+					NotifyBeep()
 				}
 				SaveConfig(cfg)
 
@@ -152,7 +143,7 @@ func onReady() {
 				} else {
 					cfg.Unshorten = true
 					mUnshorten.Check()
-					nativeBeep()
+					NotifyBeep()
 				}
 				SaveConfig(cfg)
 
@@ -163,7 +154,7 @@ func onReady() {
 				} else {
 					cfg.WSLMode = true
 					mWSL.Check()
-					nativeBeep()
+					NotifyBeep()
 				}
 				SaveConfig(cfg)
 
@@ -174,7 +165,7 @@ func onReady() {
 				} else {
 					cfg.DirectLink = true
 					mCloudBoost.Check()
-					nativeBeep()
+					NotifyBeep()
 				}
 				SaveConfig(cfg)
 			
@@ -186,7 +177,7 @@ func onReady() {
 				if err == nil {
 					clipboard.WriteAll(url)
 					OpenBrowser(url)
-					nativeBeep()
+					NotifyBeep()
 				}
 
 			case <-tTelegram.ClickedCh:
@@ -195,7 +186,7 @@ func onReady() {
 				if err == nil {
 					clipboard.WriteAll(url)
 					OpenBrowser(url)
-					nativeBeep()
+					NotifyBeep()
 				}
 
 			case <-tDecode64.ClickedCh:
@@ -203,7 +194,7 @@ func onReady() {
 				decoded, err := DecodeBase64(text)
 				if err == nil && decoded != "" {
 					clipboard.WriteAll(decoded)
-					nativeBeep()
+					NotifyBeep()
 				}
 			
 			case <-tEncode64.ClickedCh:
@@ -211,29 +202,16 @@ func onReady() {
 				if text != "" {
 					encoded := EncodeBase64(text)
 					clipboard.WriteAll(encoded)
-					nativeBeep()
+					NotifyBeep()
 				}
 
 			case <-tUUID.ClickedCh:
 				id := GenerateUUID()
 				clipboard.WriteAll(id)
-				nativeBeep()
+				NotifyBeep()
 			}
 		}
 	}()
 }
 
 func onExit() {}
-
-func showNativeError(text, title string) {
-	procMessageBox.Call(
-		0,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(text))),
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(title))),
-		MB_ICONERROR|MB_OK,
-	)
-}
-
-func nativeBeep() {
-	procMessageBeep.Call(0xFFFFFFFF)
-}
