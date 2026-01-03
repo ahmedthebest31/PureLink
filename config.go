@@ -6,11 +6,12 @@ import (
 )
 
 type Config struct {
-	Unshorten    bool `json:"unshorten"`
-	WSLMode      bool `json:"wsl_mode"`
-	DirectLink   bool `json:"direct_link"`
-	Sound        bool `json:"sound"`
-	TotalCleaned int  `json:"total_cleaned"`
+	Unshorten    bool     `json:"unshorten"`
+	WSLMode      bool     `json:"wsl_mode"`
+	DirectLink   bool     `json:"direct_link"`
+	Sound        bool     `json:"sound"`
+	TotalCleaned int      `json:"total_cleaned"`
+	History      []string `json:"history"`
 }
 
 const configFileName = "purelink_config.json"
@@ -23,6 +24,7 @@ func LoadConfig() (*Config, error) {
 		DirectLink:   true,
 		Sound:        true,
 		TotalCleaned: 0,
+		History:      []string{},
 	}
 
 	file, err := os.Open(configFileName)
