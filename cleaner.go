@@ -9,7 +9,7 @@ import (
 )
 
 // CleanText processes input for Privacy, Cloud links, and Path normalization.
-func CleanText(input string, unshorten bool, wslMode bool) string {
+func CleanText(input string, unshorten bool, wslMode bool, cloudBoost bool) string {
 	trimmed := strings.TrimSpace(input)
 
 	// 1. Path Detection
@@ -57,19 +57,21 @@ func CleanText(input string, unshorten bool, wslMode bool) string {
 	}
 
 	// 3. Cloud Booster (Dropbox & Google Drive)
-	// Automatically convert to direct download links
-	if strings.Contains(u.Host, "dropbox.com") {
-		q.Set("dl", "1")
-	} else if strings.Contains(u.Host, "drive.google.com") && strings.Contains(u.Path, "/view") {
-		// Convert /file/d/ID/view -> /uc?export=download&id=ID
-		parts := strings.Split(u.Path, "/")
-		for i, part := range parts {
-			if part == "d" && i+1 < len(parts) {
-				id := parts[i+1]
-				u.Path = "/uc"
-				q.Set("export", "download")
-				q.Set("id", id)
-				break
+	if cloudBoost {
+		// Automatically convert to direct download links
+		if strings.Contains(u.Host, "dropbox.com") {
+			q.Set("dl", "1")
+		} else if strings.Contains(u.Host, "drive.google.com") && strings.Contains(u.Path, "/view") {
+			// Convert /file/d/ID/view -> /uc?export=download&id=ID
+			parts := strings.Split(u.Path, "/")
+			for i, part := range parts {
+				if part == "d" && i+1 < len(parts) {
+					id := parts[i+1]
+					u.Path = "/uc"
+					q.Set("export", "download")
+					q.Set("id", id)
+					break
+				}
 			}
 		}
 	}

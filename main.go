@@ -44,8 +44,15 @@ func onReady() {
 	systray.SetTitle("PureLink")
 	systray.SetTooltip("PureLink Privacy Guard")
 
+	// Load Config
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Println("Error loading config:", err)
+		// cfg is already initialized with defaults even on error in LoadConfig
+	}
+
 	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
-	mCounter := systray.AddMenuItem("Cleaned: 0 Links", "Total items processed")
+	mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
 	
 	systray.AddSeparator()
 
@@ -61,23 +68,20 @@ func onReady() {
 
 	systray.AddSeparator()
 
-	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", false)
-	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", false)
+	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", cfg.Unshorten)
+	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", cfg.WSLMode)
+	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", cfg.DirectLink)
 
 	systray.AddSeparator()
 
-	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", true)
+	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", cfg.Sound)
 	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
 
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
 
-	// State
+	// Local runtime state (not persisted)
 	isRunning := true
-	isSoundEnabled := true
-	isUnshortenEnabled := false
-	isWSLMode := false
-	cleanedCount := 0
 
 	// --- Background Watcher ---
 	go func() {
@@ -91,16 +95,17 @@ func onReady() {
 			text, err := clipboard.ReadAll()
 			if err == nil && text != "" && text != lastText {
 				
-				cleaned := CleanText(text, isUnshortenEnabled, isWSLMode)
+				cleaned := CleanText(text, cfg.Unshorten, cfg.WSLMode, cfg.DirectLink)
 
 				if cleaned != text {
 					clipboard.WriteAll(cleaned)
 					lastText = cleaned
 					
-					cleanedCount++
-					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", cleanedCount))
+					cfg.TotalCleaned++
+					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", cfg.TotalCleaned))
+					SaveConfig(cfg) // Auto-save on count change
 
-					if isSoundEnabled {
+					if cfg.Sound {
 						nativeBeep()
 					}
 				} else {
@@ -130,34 +135,48 @@ func onReady() {
 				}
 
 			case <-mSound.ClickedCh:
-				if isSoundEnabled {
-					isSoundEnabled = false
+				if cfg.Sound {
+					cfg.Sound = false
 					mSound.Uncheck()
 				} else {
-					isSoundEnabled = true
+					cfg.Sound = true
 					mSound.Check()
 					nativeBeep()
 				}
+				SaveConfig(cfg)
 
 			case <-mUnshorten.ClickedCh:
-				if isUnshortenEnabled {
-					isUnshortenEnabled = false
+				if cfg.Unshorten {
+					cfg.Unshorten = false
 					mUnshorten.Uncheck()
 				} else {
-					isUnshortenEnabled = true
+					cfg.Unshorten = true
 					mUnshorten.Check()
 					nativeBeep()
 				}
+				SaveConfig(cfg)
 
 			case <-mWSL.ClickedCh:
-				if isWSLMode {
-					isWSLMode = false
+				if cfg.WSLMode {
+					cfg.WSLMode = false
 					mWSL.Uncheck()
 				} else {
-					isWSLMode = true
+					cfg.WSLMode = true
 					mWSL.Check()
 					nativeBeep()
 				}
+				SaveConfig(cfg)
+
+			case <-mCloudBoost.ClickedCh:
+				if cfg.DirectLink {
+					cfg.DirectLink = false
+					mCloudBoost.Uncheck()
+				} else {
+					cfg.DirectLink = true
+					mCloudBoost.Check()
+					nativeBeep()
+				}
+				SaveConfig(cfg)
 			
 			// --- Tools Actions ---
 			
