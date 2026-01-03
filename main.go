@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ahmedthebest31/PureLink/autostart"
 	"github.com/atotto/clipboard"
 	"github.com/getlantern/systray"
 	"github.com/gofrs/flock"
@@ -35,38 +36,52 @@ func onReady() {
 	systray.SetTitle("PureLink")
 	systray.SetTooltip("PureLink Privacy Guard")
 
-		// Load Config
-		cfg, err := LoadConfig()
-		if err != nil {
-			fmt.Println("Error loading config:", err)
-		}
-	
-		// Load Rules
-		if err := LoadRules(); err != nil {
-			fmt.Println("Error loading rules:", err)
-		}
-	
-		systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
-		mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
-		
-		systray.AddSeparator()
-	
-			// --- Tools Submenu ---
-			mTools := systray.AddMenuItem("Tools", "Manual Utilities")
-			
-			// Added items directly without separators inside the submenu (Library limitation)
-			mUpdate := mTools.AddSubMenuItem("Check for Filter Updates", "Download latest tracking rules")
-		
-			tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
-			tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
-		tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
-		tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
-		tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
-	
-		systray.AddSeparator()
+	// Load Config
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Println("Error loading config:", err)
+	}
+
+	// Load Rules
+	if err := LoadRules(); err != nil {
+		fmt.Println("Error loading rules:", err)
+	}
+
+	// Autostart Setup
+	exe, _ := os.Executable()
+	app := &autostart.App{
+		Name: "PureLink",
+		Exec: []string{exe},
+	}
+
+	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
+	mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
+
+	systray.AddSeparator()
+
+	// --- Tools Submenu ---
+	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
+
+	// Added items directly without separators inside the submenu (Library limitation)
+	mUpdate := mTools.AddSubMenuItem("Check for Filter Updates", "Download latest tracking rules")
+
+	tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
+	tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
+	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
+	tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
+	tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
+
+	systray.AddSeparator()
 	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", cfg.Unshorten)
 	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", cfg.WSLMode)
 	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", cfg.DirectLink)
+	mStartup := systray.AddMenuItemCheckbox("Run on Startup", "Launch PureLink when system starts", false)
+
+	if app.IsEnabled() {
+		mStartup.Check()
+	} else {
+		mStartup.Uncheck()
+	}
 
 	systray.AddSeparator()
 
@@ -90,13 +105,13 @@ func onReady() {
 
 			text, err := clipboard.ReadAll()
 			if err == nil && text != "" && text != lastText {
-				
+
 				cleaned := CleanText(text, cfg.Unshorten, cfg.WSLMode, cfg.DirectLink)
 
 				if cleaned != text {
 					clipboard.WriteAll(cleaned)
 					lastText = cleaned
-					
+
 					cfg.TotalCleaned++
 					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", cfg.TotalCleaned))
 					SaveConfig(cfg) // Auto-save on count change
@@ -173,9 +188,28 @@ func onReady() {
 					NotifyBeep()
 				}
 				SaveConfig(cfg)
-			
+
+			case <-mStartup.ClickedCh:
+				if app.IsEnabled() {
+					if err := app.Disable(); err != nil {
+						dialog.Message("Failed to disable startup: %v", err).Title("Error").Error()
+					} else {
+						mStartup.Uncheck()
+						dialog.Message("PureLink will no longer run on startup.").Title("Startup Disabled").Info()
+						NotifyBeep()
+					}
+				} else {
+					if err := app.Enable(); err != nil {
+						dialog.Message("Failed to enable startup: %v", err).Title("Error").Error()
+					} else {
+						mStartup.Check()
+						dialog.Message("PureLink will now run automatically when you log in.").Title("Startup Enabled").Info()
+						NotifyBeep()
+					}
+				}
+
 			// --- Tools Actions ---
-			
+
 			case <-mUpdate.ClickedCh:
 				err := UpdateFilters()
 				if err != nil {
@@ -210,7 +244,7 @@ func onReady() {
 					clipboard.WriteAll(decoded)
 					NotifyBeep()
 				}
-			
+
 			case <-tEncode64.ClickedCh:
 				text, _ := clipboard.ReadAll()
 				if text != "" {
