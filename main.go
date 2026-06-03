@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/ahmedthebest31/PureLink/autostart"
@@ -162,6 +164,7 @@ func onReady() {
 	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", app.Config.Sound)
 	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
 	systray.AddSeparator()
+	mOpenConfig := systray.AddMenuItem("Open Config File", "Open purelink_config.json in default editor")
 	mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
 
 	isRunning := true
@@ -223,6 +226,16 @@ func onReady() {
 	go func() {
 		for {
 			select {
+			case <-mOpenConfig.ClickedCh:
+				switch runtime.GOOS {
+				case "windows":
+					exec.Command("cmd", "/c", "start", "", app.configPath).Start()
+				case "darwin":
+					exec.Command("open", app.configPath).Start()
+				default:
+					exec.Command("xdg-open", app.configPath).Start()
+				}
+
 			case <-mQuit.ClickedCh:
 				updaterCancel()
 				systray.Quit()

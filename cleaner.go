@@ -57,6 +57,15 @@ func (app *App) CleanText(input string) string {
 		return finalURL
 	}
 
+	app.mu.RLock()
+	ignoreList := app.Config.IgnoreList
+	app.mu.RUnlock()
+	for _, ignored := range ignoreList {
+		if ignored != "" && strings.Contains(u.Host, ignored) {
+			return input
+		}
+	}
+
 	params := app.GetRules()
 
 	q := u.Query()

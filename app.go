@@ -30,6 +30,7 @@ func NewApp() (*App, error) {
 			DirectLink: true,
 			Sound:      true,
 			History:    []string{},
+			IgnoreList: []string{"localhost", "127.0.0.1"},
 		},
 		ActiveBlocklist: defaultRules(),
 		configPath:      filepath.Join(appDir, configFileName),
@@ -104,6 +105,9 @@ func (app *App) writeRulesFile(config *RuleConfig) error {
 func (app *App) Load() error {
 	if err := app.loadConfigFile(); err != nil {
 		return fmt.Errorf("config load: %w", err)
+	}
+	if app.Config.IgnoreList == nil {
+		app.Config.IgnoreList = []string{"localhost", "127.0.0.1"}
 	}
 	if err := app.loadRulesFile(); err != nil {
 		return fmt.Errorf("rules load: %w", err)
