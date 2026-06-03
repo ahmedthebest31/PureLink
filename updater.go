@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,11 +10,16 @@ import (
 
 const updateURL = "https://raw.githubusercontent.com/ahmedthebest31/PureLink/main/rules.json"
 
-func (app *App) UpdateFilters() error {
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(updateURL)
+func (app *App) UpdateFilters(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, updateURL, nil)
 	if err != nil {
-		return fmt.Errorf("network error: %v", err)
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("network error: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -24,19 +30,20 @@ func (app *App) UpdateFilters() error {
 	var newConfig RuleConfig
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&newConfig); err != nil {
-		return fmt.Errorf("invalid rule format: %v", err)
+		return fmt.Errorf("invalid rule format: %w", err)
 	}
 
 	if len(newConfig.Blocklist) == 0 {
 		return fmt.Errorf("downloaded rules are empty")
 	}
 
-	if err := app.writeRulesFile(&newConfig); err != nil {
-		return fmt.Errorf("failed to save rules: %v", err)
-	}
+	app.mu.Lock()
+	app.ActiveBlocklist = newConfig.Blocklist
+	err = app.writeRulesFile(&newConfig)
+	app.mu.Unlock()
 
-	if err := app.loadRulesFile(); err != nil {
-		return fmt.Errorf("failed to apply new rules: %v", err)
+	if err != nil {
+		return fmt.Errorf("failed to persist rules: %w", err)
 	}
 
 	return nil

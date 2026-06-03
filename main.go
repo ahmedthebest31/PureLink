@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"os"
@@ -51,6 +52,21 @@ func onReady() {
 	if err := app.Load(); err != nil {
 		fmt.Println("Warning loading app state:", err)
 	}
+
+	// Background auto-updater (every 7 days, respects shutdown)
+	updaterCtx, updaterCancel := context.WithCancel(context.Background())
+	go func() {
+		ticker := time.NewTicker(7 * 24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_ = app.UpdateFilters(updaterCtx)
+			case <-updaterCtx.Done():
+				return
+			}
+		}
+	}()
 
 	// Autostart Setup
 	exe, _ := os.Executable()
@@ -107,7 +123,7 @@ func onReady() {
 
 	// --- Tools Submenu ---
 	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
-	mUpdate := mTools.AddSubMenuItem("Check for Filter Updates", "Download latest tracking rules")
+	mUpdate := mTools.AddSubMenuItem("Update Filters Now", "Download latest tracking rules")
 	tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
 	tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
 	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
@@ -118,6 +134,8 @@ func onReady() {
 	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", app.Config.Unshorten)
 	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", app.Config.WSLMode)
 	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", app.Config.DirectLink)
+	mWhatsApp := systray.AddMenuItemCheckbox("Auto WhatsApp", "Auto-convert phone numbers to WhatsApp links", app.Config.WhatsAppLinks)
+	mTelegram := systray.AddMenuItemCheckbox("Auto Telegram", "Auto-convert usernames to Telegram links", app.Config.TelegramLinks)
 	mStartup := systray.AddMenuItemCheckbox("Run on Startup", "Launch PureLink when system starts", false)
 
 	if startupApp.IsEnabled() {
@@ -145,13 +163,7 @@ func onReady() {
 
 			text, err := clipboard.ReadAll()
 			if err == nil && text != "" && text != lastText {
-				app.mu.RLock()
-				unshorten := app.Config.Unshorten
-				wslMode := app.Config.WSLMode
-				directLink := app.Config.DirectLink
-				app.mu.RUnlock()
-
-				cleaned := app.CleanText(text, unshorten, wslMode, directLink)
+				cleaned := app.CleanText(text)
 
 				if cleaned != text {
 					clipboard.WriteAll(cleaned)
@@ -195,6 +207,7 @@ func onReady() {
 		for {
 			select {
 			case <-mQuit.ClickedCh:
+				updaterCancel()
 				systray.Quit()
 
 			case <-mPause.ClickedCh:
@@ -270,6 +283,32 @@ func onReady() {
 				app.writeConfigFile()
 				app.mu.Unlock()
 
+			case <-mWhatsApp.ClickedCh:
+				app.mu.Lock()
+				if app.Config.WhatsAppLinks {
+					app.Config.WhatsAppLinks = false
+					mWhatsApp.Uncheck()
+				} else {
+					app.Config.WhatsAppLinks = true
+					mWhatsApp.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mTelegram.ClickedCh:
+				app.mu.Lock()
+				if app.Config.TelegramLinks {
+					app.Config.TelegramLinks = false
+					mTelegram.Uncheck()
+				} else {
+					app.Config.TelegramLinks = true
+					mTelegram.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
 			case <-mStartup.ClickedCh:
 				if startupApp.IsEnabled() {
 					if err := startupApp.Disable(); err != nil {
@@ -291,7 +330,7 @@ func onReady() {
 
 			// --- Tools Actions ---
 			case <-mUpdate.ClickedCh:
-				err := app.UpdateFilters()
+				err := app.UpdateFilters(context.Background())
 				if err != nil {
 					dialog.Message("Update failed: %v", err).Title("Error").Error()
 				} else {
