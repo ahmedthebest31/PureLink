@@ -13,6 +13,7 @@ type Config struct {
 	TotalCleaned int      `json:"total_cleaned"`
 	History      []string `json:"history"`
 	IgnoreList   []string `json:"ignore_list"`
+	SkippedVersion string `json:"skipped_version"`
 }
 
 const configFileName = "purelink_config.json"

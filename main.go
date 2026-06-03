@@ -17,6 +17,8 @@ import (
 	"github.com/sqweek/dialog"
 )
 
+const AppVersion = "v3.0.0"
+
 //go:embed icon.png
 var iconData []byte
 
@@ -32,7 +34,25 @@ func lockFilePath() (string, error) {
 	return filepath.Join(appDir, "purelink.lock"), nil
 }
 
+func cleanupOldBinaries() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	dir := filepath.Dir(exe)
+	pattern := filepath.Join(dir, "*.old")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return
+	}
+	for _, m := range matches {
+		os.Remove(m)
+	}
+}
+
 func main() {
+	cleanupOldBinaries()
+
 	lockPath, err := lockFilePath()
 	if err != nil {
 		dialog.Message("Cannot resolve lock path: %v", err).Title("Error").Error()
@@ -70,6 +90,9 @@ func onReady() {
 	if err := app.Load(); err != nil {
 		fmt.Println("Warning loading app state:", err)
 	}
+
+	// Background version check on startup (silent, respects SkippedVersion)
+	go app.checkForUpdates(false)
 
 	// Background auto-updater (every 7 days, respects shutdown)
 	updaterCtx, updaterCancel := context.WithCancel(context.Background())
@@ -142,6 +165,8 @@ func onReady() {
 	// --- Tools Submenu ---
 	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
 	mUpdate := mTools.AddSubMenuItem("Update Filters Now", "Download latest tracking rules")
+	mCheckUpdates := mTools.AddSubMenuItem("Check for Updates", "Check for new PureLink version")
+	mViewReleaseNotes := mTools.AddSubMenuItem("View Release Notes", "Open GitHub release page")
 	tWhatsApp := mTools.AddSubMenuItem("Convert to WhatsApp", "Read clipboard, format as WhatsApp link")
 	tTelegram := mTools.AddSubMenuItem("Convert to Telegram", "Read clipboard, format as Telegram link")
 	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
@@ -340,6 +365,19 @@ func onReady() {
 				} else {
 					dialog.Message("Filters updated successfully!").Title("Success").Info()
 					NotifyBeep()
+				}
+
+			case <-mCheckUpdates.ClickedCh:
+				app.checkForUpdates(true)
+
+			case <-mViewReleaseNotes.ClickedCh:
+				switch runtime.GOOS {
+				case "windows":
+					exec.Command("rundll32", "url.dll,FileProtocolHandler", releaseNotesURL).Start()
+				case "darwin":
+					exec.Command("open", releaseNotesURL).Start()
+				default:
+					exec.Command("xdg-open", releaseNotesURL).Start()
 				}
 
 			case <-tWhatsApp.ClickedCh:
