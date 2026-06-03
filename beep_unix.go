@@ -2,6 +2,8 @@
 
 package main
 
+import "os"
+
 func NotifyBeep() {
-	// Placeholder for Linux/macOS
+	os.Stderr.Write([]byte{0x07})
 }

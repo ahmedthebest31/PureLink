@@ -40,7 +40,7 @@ func main() {
 func onReady() {
 	systray.SetIcon(iconData)
 	systray.SetTitle("PureLink")
-	systray.SetTooltip("PureLink Privacy Guard")
+	systray.SetTooltip("PureLink \u2014 Filtering Active")
 
 	// Create App with resolved config/rules paths
 	app, err := NewApp()
@@ -214,11 +214,11 @@ func onReady() {
 				if isRunning {
 					isRunning = false
 					mPause.SetTitle("Resume Protection")
-					systray.SetTooltip("PureLink (Paused)")
+					systray.SetTooltip("PureLink \u2014 Filtering Paused")
 				} else {
 					isRunning = true
 					mPause.SetTitle("Pause Protection")
-					systray.SetTooltip("PureLink (Active)")
+					systray.SetTooltip("PureLink \u2014 Filtering Active")
 				}
 
 			case idx := <-historyClicked:
