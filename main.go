@@ -18,9 +18,25 @@ import (
 //go:embed icon.png
 var iconData []byte
 
+func lockFilePath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	appDir := filepath.Join(configDir, "PureLink")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		return "", err
+	}
+	return filepath.Join(appDir, "purelink.lock"), nil
+}
+
 func main() {
-	lockFile := filepath.Join(os.TempDir(), "purelink.lock")
-	fileLock := flock.New(lockFile)
+	lockPath, err := lockFilePath()
+	if err != nil {
+		dialog.Message("Cannot resolve lock path: %v", err).Title("Error").Error()
+		return
+	}
+	fileLock := flock.New(lockPath)
 
 	locked, err := fileLock.TryLock()
 	if err != nil {
@@ -124,8 +140,8 @@ func onReady() {
 	// --- Tools Submenu ---
 	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
 	mUpdate := mTools.AddSubMenuItem("Update Filters Now", "Download latest tracking rules")
-	tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
-	tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
+	tWhatsApp := mTools.AddSubMenuItem("Convert to WhatsApp", "Read clipboard, format as WhatsApp link")
+	tTelegram := mTools.AddSubMenuItem("Convert to Telegram", "Read clipboard, format as Telegram link")
 	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
 	tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
 	tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
@@ -134,8 +150,6 @@ func onReady() {
 	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", app.Config.Unshorten)
 	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", app.Config.WSLMode)
 	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", app.Config.DirectLink)
-	mWhatsApp := systray.AddMenuItemCheckbox("Auto WhatsApp", "Auto-convert phone numbers to WhatsApp links", app.Config.WhatsAppLinks)
-	mTelegram := systray.AddMenuItemCheckbox("Auto Telegram", "Auto-convert usernames to Telegram links", app.Config.TelegramLinks)
 	mStartup := systray.AddMenuItemCheckbox("Run on Startup", "Launch PureLink when system starts", false)
 
 	if startupApp.IsEnabled() {
@@ -155,6 +169,7 @@ func onReady() {
 	// --- Background Clipboard Watcher ---
 	go func() {
 		lastText, _ := clipboard.ReadAll()
+		lastSeen := time.Now()
 		for {
 			if !isRunning {
 				time.Sleep(1 * time.Second)
@@ -162,7 +177,9 @@ func onReady() {
 			}
 
 			text, err := clipboard.ReadAll()
-			if err == nil && text != "" && text != lastText {
+			now := time.Now()
+			if err == nil && text != "" && (text != lastText || now.Sub(lastSeen) >= time.Second) {
+				lastSeen = now
 				cleaned := app.CleanText(text)
 
 				if cleaned != text {
@@ -283,32 +300,6 @@ func onReady() {
 				app.writeConfigFile()
 				app.mu.Unlock()
 
-			case <-mWhatsApp.ClickedCh:
-				app.mu.Lock()
-				if app.Config.WhatsAppLinks {
-					app.Config.WhatsAppLinks = false
-					mWhatsApp.Uncheck()
-				} else {
-					app.Config.WhatsAppLinks = true
-					mWhatsApp.Check()
-					NotifyBeep()
-				}
-				app.writeConfigFile()
-				app.mu.Unlock()
-
-			case <-mTelegram.ClickedCh:
-				app.mu.Lock()
-				if app.Config.TelegramLinks {
-					app.Config.TelegramLinks = false
-					mTelegram.Uncheck()
-				} else {
-					app.Config.TelegramLinks = true
-					mTelegram.Check()
-					NotifyBeep()
-				}
-				app.writeConfigFile()
-				app.mu.Unlock()
-
 			case <-mStartup.ClickedCh:
 				if startupApp.IsEnabled() {
 					if err := startupApp.Disable(); err != nil {
@@ -343,7 +334,6 @@ func onReady() {
 				url, err := GetWhatsAppLink(text)
 				if err == nil {
 					clipboard.WriteAll(url)
-					OpenBrowser(url)
 					NotifyBeep()
 				}
 
@@ -352,7 +342,6 @@ func onReady() {
 				url, err := GetTelegramLink(text)
 				if err == nil {
 					clipboard.WriteAll(url)
-					OpenBrowser(url)
 					NotifyBeep()
 				}
 

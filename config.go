@@ -6,14 +6,12 @@ import (
 )
 
 type Config struct {
-	Unshorten      bool     `json:"unshorten"`
-	WSLMode        bool     `json:"wsl_mode"`
-	DirectLink     bool     `json:"direct_link"`
-	Sound          bool     `json:"sound"`
-	TotalCleaned   int      `json:"total_cleaned"`
-	History        []string `json:"history"`
-	WhatsAppLinks  bool     `json:"whatsapp_links"`
-	TelegramLinks  bool     `json:"telegram_links"`
+	Unshorten    bool     `json:"unshorten"`
+	WSLMode      bool     `json:"wsl_mode"`
+	DirectLink   bool     `json:"direct_link"`
+	Sound        bool     `json:"sound"`
+	TotalCleaned int      `json:"total_cleaned"`
+	History      []string `json:"history"`
 }
 
 const configFileName = "purelink_config.json"
