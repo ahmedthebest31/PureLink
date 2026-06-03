@@ -27,10 +27,12 @@ func NewApp() (*App, error) {
 	}
 	return &App{
 		Config: &Config{
-			DirectLink: true,
-			Sound:      true,
-			History:    []string{},
-			IgnoreList: []string{"localhost", "127.0.0.1"},
+			CloudBoost:             true,
+			YouTubeShorts:          true,
+			Sound:                  true,
+			History:                []string{},
+			IgnoreList:             []string{"localhost", "127.0.0.1"},
+			EnableClipboardCommands: true,
 		},
 		ActiveBlocklist: defaultRules(),
 		configPath:      filepath.Join(appDir, configFileName),

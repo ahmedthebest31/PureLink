@@ -18,7 +18,10 @@ func (app *App) CleanText(input string) string {
 	}
 
 	// 1. Command triggers (!wa, !tg, !b64e, !b64d, !uuid)
-	if strings.HasPrefix(trimmed, "!") {
+	app.mu.RLock()
+	enableCommands := app.Config.EnableClipboardCommands
+	app.mu.RUnlock()
+	if enableCommands && strings.HasPrefix(trimmed, "!") {
 		if result, ok := app.handleCommand(trimmed); ok {
 			return result
 		}
@@ -40,7 +43,8 @@ func (app *App) CleanText(input string) string {
 	// 4. URL cleaning
 	app.mu.RLock()
 	unshorten := app.Config.Unshorten
-	cloudBoost := app.Config.DirectLink
+	cloudBoost := app.Config.CloudBoost
+	youtubeShorts := app.Config.YouTubeShorts
 	app.mu.RUnlock()
 
 	finalURL := trimmed
@@ -73,7 +77,7 @@ func (app *App) CleanText(input string) string {
 		q.Del(param)
 	}
 
-	if strings.Contains(u.Host, "youtube.com") && strings.Contains(u.Path, "/shorts/") {
+	if youtubeShorts && strings.Contains(u.Host, "youtube.com") && strings.Contains(u.Path, "/shorts/") {
 		videoID := strings.TrimPrefix(u.Path, "/shorts/")
 		u.Path = "/watch"
 		q.Set("v", videoID)
@@ -97,7 +101,24 @@ func (app *App) CleanText(input string) string {
 	}
 
 	u.RawQuery = q.Encode()
-	return u.String()
+	result := u.String()
+	if result != input {
+		app.mu.Lock()
+		app.Config.TotalCleaned++
+		var newHistory []string
+		for _, item := range app.Config.History {
+			if item != result {
+				newHistory = append(newHistory, item)
+			}
+		}
+		app.Config.History = append([]string{result}, newHistory...)
+		if len(app.Config.History) > 5 {
+			app.Config.History = app.Config.History[:5]
+		}
+		app.writeConfigFile()
+		app.mu.Unlock()
+	}
+	return result
 }
 
 func (app *App) handleCommand(input string) (string, bool) {

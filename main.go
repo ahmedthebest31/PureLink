@@ -117,7 +117,6 @@ func onReady() {
 	}
 
 	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
-	mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", app.Config.TotalCleaned), "Total items processed")
 	systray.AddSeparator()
 
 	// --- Recent History ---
@@ -162,21 +161,41 @@ func onReady() {
 
 	systray.AddSeparator()
 
-	// --- Tools Submenu ---
-	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
-	mUpdate := mTools.AddSubMenuItem("Update Filters Now", "Download latest tracking rules")
-	mCheckUpdates := mTools.AddSubMenuItem("Check for Updates", "Check for new PureLink version")
-	mViewReleaseNotes := mTools.AddSubMenuItem("View Release Notes", "Open GitHub release page")
-	tWhatsApp := mTools.AddSubMenuItem("Convert to WhatsApp", "Read clipboard, format as WhatsApp link")
-	tTelegram := mTools.AddSubMenuItem("Convert to Telegram", "Read clipboard, format as Telegram link")
-	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
-	tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
-	tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
+	// --- Social Tools Submenu ---
+	mSocialTools := systray.AddMenuItem("Social Tools", "Manual social link utilities")
+	tWhatsApp := mSocialTools.AddSubMenuItem("Convert to WhatsApp", "Read clipboard, format as WhatsApp link")
+	tTelegram := mSocialTools.AddSubMenuItem("Convert to Telegram", "Read clipboard, format as Telegram link")
+
+	// --- Updates & Rules Submenu ---
+	mUpdatesRules := systray.AddMenuItem("Updates && Rules", "Update filters and check for app updates")
+	mUpdate := mUpdatesRules.AddSubMenuItem("Update Filters Now", "Download latest tracking rules")
+	mCheckUpdates := mUpdatesRules.AddSubMenuItem("Check for App Updates", "Check for new PureLink version")
+	mViewReleaseNotes := mUpdatesRules.AddSubMenuItem("View Release Notes", "Open GitHub release page")
+
+	// --- Advanced Settings Submenu ---
+	mAdvanced := systray.AddMenuItem("Advanced Settings", "Toggles and data management")
+	mYouTubeShorts := mAdvanced.AddSubMenuItemCheckbox("YouTube Shorts Fix", "Convert /shorts/ links to /watch", app.Config.YouTubeShorts)
+	mCloudBoost := mAdvanced.AddSubMenuItemCheckbox("Cloud Boost", "Auto-convert Dropbox/Drive links", app.Config.CloudBoost)
+	mEnableClipboardCommands := mAdvanced.AddSubMenuItemCheckbox("Clipboard Commands", "Enable !wa !tg !b64e !b64d !uuid prefixes", app.Config.EnableClipboardCommands)
+	mClearData := mAdvanced.AddSubMenuItem("Clear Data && History", "Reset cleaned count and history")
+
+	// --- Developer Tools Submenu ---
+	mDevTools := systray.AddMenuItem("Developer Tools", "Utilities for developers")
+	mWSL := mDevTools.AddSubMenuItemCheckbox("WSL Path Mode", "Persistently convert C:\\ to /mnt/c/", app.Config.WSLMode)
+	mConvertWSL := mDevTools.AddSubMenuItem("Convert Clipboard to WSL Path", "One-off WSL path conversion")
+	tEncode64 := mDevTools.AddSubMenuItem("Base64 Encode", "Encode clipboard text to Base64")
+	tDecode64 := mDevTools.AddSubMenuItem("Base64 Decode", "Decode Base64 string from clipboard")
+	tUUID := mDevTools.AddSubMenuItem("Generate UUID", "Generate and copy a new UUID")
+	tURLEncode := mDevTools.AddSubMenuItem("URL Encode", "Percent-encode clipboard text")
+	tURLDecode := mDevTools.AddSubMenuItem("URL Decode", "Decode percent-encoded clipboard text")
+	tFormatJSON := mDevTools.AddSubMenuItem("Format JSON", "Pretty-print JSON from clipboard")
+	tUnixTimestamp := mDevTools.AddSubMenuItem("Unix Timestamp", "Generate current epoch seconds")
+	tDecodeJWT := mDevTools.AddSubMenuItem("Decode JWT Payload", "Extract and pretty-print JWT payload")
 
 	systray.AddSeparator()
+	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
+	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", app.Config.Sound)
 	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", app.Config.Unshorten)
-	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", app.Config.WSLMode)
-	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", app.Config.DirectLink)
 	mStartup := systray.AddMenuItemCheckbox("Run on Startup", "Launch PureLink when system starts", false)
 
 	if startupApp.IsEnabled() {
@@ -185,9 +204,6 @@ func onReady() {
 		mStartup.Uncheck()
 	}
 
-	systray.AddSeparator()
-	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", app.Config.Sound)
-	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
 	systray.AddSeparator()
 	mOpenConfig := systray.AddMenuItem("Open Config File", "Open purelink_config.json in default editor")
 	mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
@@ -213,24 +229,6 @@ func onReady() {
 				if cleaned != text {
 					clipboard.WriteAll(cleaned)
 					lastText = cleaned
-
-					app.mu.Lock()
-					app.Config.TotalCleaned++
-
-					var newHistory []string
-					for _, item := range app.Config.History {
-						if item != cleaned {
-							newHistory = append(newHistory, item)
-						}
-					}
-					app.Config.History = append([]string{cleaned}, newHistory...)
-					if len(app.Config.History) > 5 {
-						app.Config.History = app.Config.History[:5]
-					}
-					app.writeConfigFile()
-					app.mu.Unlock()
-
-					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", app.Config.TotalCleaned))
 					updateHistoryMenu()
 
 					app.mu.RLock()
@@ -286,6 +284,54 @@ func onReady() {
 				}
 				app.mu.RUnlock()
 
+			// --- Advanced Settings ---
+			case <-mYouTubeShorts.ClickedCh:
+				app.mu.Lock()
+				if app.Config.YouTubeShorts {
+					app.Config.YouTubeShorts = false
+					mYouTubeShorts.Uncheck()
+				} else {
+					app.Config.YouTubeShorts = true
+					mYouTubeShorts.Check()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mCloudBoost.ClickedCh:
+				app.mu.Lock()
+				if app.Config.CloudBoost {
+					app.Config.CloudBoost = false
+					mCloudBoost.Uncheck()
+				} else {
+					app.Config.CloudBoost = true
+					mCloudBoost.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mEnableClipboardCommands.ClickedCh:
+				app.mu.Lock()
+				if app.Config.EnableClipboardCommands {
+					app.Config.EnableClipboardCommands = false
+					mEnableClipboardCommands.Uncheck()
+				} else {
+					app.Config.EnableClipboardCommands = true
+					mEnableClipboardCommands.Check()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mClearData.ClickedCh:
+				app.mu.Lock()
+				app.Config.TotalCleaned = 0
+				app.Config.History = nil
+				app.writeConfigFile()
+				app.mu.Unlock()
+				updateHistoryMenu()
+				dialog.Message("Cleaned count and history have been reset.").Title("Data Cleared").Info()
+
+			// --- Main Toggles ---
 			case <-mSound.ClickedCh:
 				app.mu.Lock()
 				if app.Config.Sound {
@@ -312,32 +358,6 @@ func onReady() {
 				app.writeConfigFile()
 				app.mu.Unlock()
 
-			case <-mWSL.ClickedCh:
-				app.mu.Lock()
-				if app.Config.WSLMode {
-					app.Config.WSLMode = false
-					mWSL.Uncheck()
-				} else {
-					app.Config.WSLMode = true
-					mWSL.Check()
-					NotifyBeep()
-				}
-				app.writeConfigFile()
-				app.mu.Unlock()
-
-			case <-mCloudBoost.ClickedCh:
-				app.mu.Lock()
-				if app.Config.DirectLink {
-					app.Config.DirectLink = false
-					mCloudBoost.Uncheck()
-				} else {
-					app.Config.DirectLink = true
-					mCloudBoost.Check()
-					NotifyBeep()
-				}
-				app.writeConfigFile()
-				app.mu.Unlock()
-
 			case <-mStartup.ClickedCh:
 				if startupApp.IsEnabled() {
 					if err := startupApp.Disable(); err != nil {
@@ -357,7 +377,93 @@ func onReady() {
 					}
 				}
 
-			// --- Tools Actions ---
+			// --- Developer Tools Actions ---
+			case <-mWSL.ClickedCh:
+				app.mu.Lock()
+				if app.Config.WSLMode {
+					app.Config.WSLMode = false
+					mWSL.Uncheck()
+				} else {
+					app.Config.WSLMode = true
+					mWSL.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mConvertWSL.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				if text != "" {
+					result := ConvertToWSL(text)
+					if result != text {
+						clipboard.WriteAll(result)
+						NotifyBeep()
+					}
+				}
+
+			case <-tEncode64.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				if text != "" {
+					clipboard.WriteAll(EncodeBase64(text))
+					NotifyBeep()
+				}
+
+			case <-tDecode64.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				decoded, err := DecodeBase64(text)
+				if err == nil && decoded != "" {
+					clipboard.WriteAll(decoded)
+					NotifyBeep()
+				} else {
+					NotifyBeep()
+				}
+
+			case <-tUUID.ClickedCh:
+				clipboard.WriteAll(GenerateUUID())
+				NotifyBeep()
+
+			case <-tURLEncode.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				if text != "" {
+					clipboard.WriteAll(URLEncode(text))
+					NotifyBeep()
+				}
+
+			case <-tURLDecode.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				decoded, err := URLDecode(text)
+				if err == nil {
+					clipboard.WriteAll(decoded)
+					NotifyBeep()
+				} else {
+					NotifyBeep()
+				}
+
+			case <-tFormatJSON.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				formatted, err := FormatJSON(text)
+				if err == nil {
+					clipboard.WriteAll(formatted)
+					NotifyBeep()
+				} else {
+					NotifyBeep()
+				}
+
+			case <-tUnixTimestamp.ClickedCh:
+				clipboard.WriteAll(UnixTimestamp())
+				NotifyBeep()
+
+			case <-tDecodeJWT.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				payload, err := DecodeJWTPayload(text)
+				if err == nil {
+					clipboard.WriteAll(payload)
+					NotifyBeep()
+				} else {
+					NotifyBeep()
+				}
+
+			// --- Updates & Rules Actions ---
 			case <-mUpdate.ClickedCh:
 				err := app.UpdateFilters(context.Background())
 				if err != nil {
@@ -380,6 +486,7 @@ func onReady() {
 					exec.Command("xdg-open", releaseNotesURL).Start()
 				}
 
+			// --- Social Tools Actions ---
 			case <-tWhatsApp.ClickedCh:
 				text, _ := clipboard.ReadAll()
 				url, err := GetWhatsAppLink(text)
@@ -395,27 +502,6 @@ func onReady() {
 					clipboard.WriteAll(url)
 					NotifyBeep()
 				}
-
-			case <-tDecode64.ClickedCh:
-				text, _ := clipboard.ReadAll()
-				decoded, err := DecodeBase64(text)
-				if err == nil && decoded != "" {
-					clipboard.WriteAll(decoded)
-					NotifyBeep()
-				}
-
-			case <-tEncode64.ClickedCh:
-				text, _ := clipboard.ReadAll()
-				if text != "" {
-					encoded := EncodeBase64(text)
-					clipboard.WriteAll(encoded)
-					NotifyBeep()
-				}
-
-			case <-tUUID.ClickedCh:
-				id := GenerateUUID()
-				clipboard.WriteAll(id)
-				NotifyBeep()
 			}
 		}
 	}()

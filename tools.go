@@ -3,10 +3,14 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // GenerateUUID creates a random version 4 UUID.
@@ -69,4 +73,65 @@ func GetTelegramLink(input string) (string, error) {
 // OpenBrowser opens a URL using the default Windows handler.
 func OpenBrowser(url string) error {
 	return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+}
+
+// ConvertToWSL converts a Windows path to WSL /mnt/ format.
+func ConvertToWSL(input string) string {
+	clean := strings.Trim(input, "\"'")
+	clean = strings.ReplaceAll(clean, "\\", "/")
+	if len(clean) > 1 && clean[1] == ':' {
+		drive := strings.ToLower(string(clean[0]))
+		remainder := clean[2:]
+		if !strings.HasPrefix(remainder, "/") {
+			remainder = "/" + remainder
+		}
+		clean = "/mnt/" + drive + remainder
+	}
+	return clean
+}
+
+// URLEncode percent-encodes a string.
+func URLEncode(input string) string {
+	return url.QueryEscape(input)
+}
+
+// URLDecode decodes a percent-encoded string.
+func URLDecode(input string) (string, error) {
+	return url.QueryUnescape(input)
+}
+
+// FormatJSON pretty-prints a JSON string.
+func FormatJSON(input string) (string, error) {
+	var v interface{}
+	if err := json.Unmarshal([]byte(input), &v); err != nil {
+		return "", err
+	}
+	out, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// UnixTimestamp returns the current Unix epoch seconds as a string.
+func UnixTimestamp() string {
+	return strconv.FormatInt(time.Now().Unix(), 10)
+}
+
+// DecodeJWTPayload extracts and pretty-prints the JSON payload from a JWT token.
+func DecodeJWTPayload(input string) (string, error) {
+	parts := strings.Split(input, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid JWT format")
+	}
+	data, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("cannot decode JWT payload: %w", err)
+	}
+	var v interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return "", fmt.Errorf("JWT payload is not valid JSON: %w", err)
+	}
+	out, _ := json.MarshalIndent(v, "", "  ")
+	return string(out), nil
 }

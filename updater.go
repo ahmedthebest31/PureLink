@@ -115,20 +115,32 @@ func (app *App) checkForUpdates(force bool) {
 
 	resp, err := client.Get(gitHubReleaseURL)
 	if err != nil {
+		if force {
+			dialog.Message("Failed to check for updates: %v", err).Title("Update Error").Error()
+		}
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if force {
+			dialog.Message("Update server returned status %d.", resp.StatusCode).Title("Update Error").Error()
+		}
 		return
 	}
 
 	var release githubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		if force {
+			dialog.Message("Failed to parse update response: %v", err).Title("Update Error").Error()
+		}
 		return
 	}
 
 	if release.TagName == "" {
+		if force {
+			dialog.Message("No version information found.").Title("Update Error").Error()
+		}
 		return
 	}
 
@@ -142,6 +154,9 @@ func (app *App) checkForUpdates(force bool) {
 	}
 
 	if !isNewerVersion(AppVersion, release.TagName) {
+		if force {
+			dialog.Message("You are on the latest version (%s).", AppVersion).Title("Up to Date").Info()
+		}
 		return
 	}
 

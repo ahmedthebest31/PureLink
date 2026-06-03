@@ -6,14 +6,16 @@ import (
 )
 
 type Config struct {
-	Unshorten    bool     `json:"unshorten"`
-	WSLMode      bool     `json:"wsl_mode"`
-	DirectLink   bool     `json:"direct_link"`
-	Sound        bool     `json:"sound"`
-	TotalCleaned int      `json:"total_cleaned"`
-	History      []string `json:"history"`
-	IgnoreList   []string `json:"ignore_list"`
-	SkippedVersion string `json:"skipped_version"`
+	Unshorten      bool     `json:"unshorten"`
+	WSLMode        bool     `json:"wsl_mode"`
+	CloudBoost     bool     `json:"cloud_boost"`
+	YouTubeShorts  bool     `json:"youtube_shorts"`
+	Sound          bool     `json:"sound"`
+	TotalCleaned   int      `json:"total_cleaned"`
+	History        []string `json:"history"`
+	IgnoreList            []string `json:"ignore_list"`
+	SkippedVersion        string   `json:"skipped_version"`
+	EnableClipboardCommands bool   `json:"enable_clipboard_commands"`
 }
 
 const configFileName = "purelink_config.json"
