@@ -9,12 +9,8 @@ import (
 
 const updateURL = "https://raw.githubusercontent.com/ahmedthebest31/PureLink/main/rules.json"
 
-// UpdateFilters downloads the latest rules from the repository and updates the local configuration.
-func UpdateFilters() error {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
+func (app *App) UpdateFilters() error {
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(updateURL)
 	if err != nil {
 		return fmt.Errorf("network error: %v", err)
@@ -25,7 +21,6 @@ func UpdateFilters() error {
 		return fmt.Errorf("server returned status: %d", resp.StatusCode)
 	}
 
-	// Decode to verify validity
 	var newConfig RuleConfig
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&newConfig); err != nil {
@@ -36,13 +31,11 @@ func UpdateFilters() error {
 		return fmt.Errorf("downloaded rules are empty")
 	}
 
-	// Save to disk
-	if err := saveRulesToFile(&newConfig); err != nil {
+	if err := app.writeRulesFile(&newConfig); err != nil {
 		return fmt.Errorf("failed to save rules: %v", err)
 	}
 
-	// Reload into memory
-	if err := LoadRules(); err != nil {
+	if err := app.loadRulesFile(); err != nil {
 		return fmt.Errorf("failed to apply new rules: %v", err)
 	}
 

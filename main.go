@@ -1,11 +1,10 @@
 package main
 
 import (
-	_ "embed" // New import, used for //go:embed directive
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/ahmedthebest31/PureLink/autostart"
@@ -38,617 +37,309 @@ func main() {
 }
 
 func onReady() {
-	systray.SetIcon(iconData) // Set tray icon
+	systray.SetIcon(iconData)
 	systray.SetTitle("PureLink")
 	systray.SetTooltip("PureLink Privacy Guard")
 
-		// Load Config
-
-		cfg, err := LoadConfig()
-
-		if err != nil {
-
-			fmt.Println("Error loading config:", err)
-
-		}
-
-		var cfgMutex sync.Mutex // Protects concurrent access to cfg
-
-	
-
-		// Load Rules
-
-		if err := LoadRules(); err != nil {
-
-			fmt.Println("Error loading rules:", err)
-
-		}
-
-	
-
-		// Autostart Setup
-
-		exe, _ := os.Executable()
-
-		app := &autostart.App{
-
-		Name: "PureLink",
-
-		Exec: []string{exe},
-
+	// Create App with resolved config/rules paths
+	app, err := NewApp()
+	if err != nil {
+		dialog.Message("Failed to initialize PureLink: %v", err).Title("Fatal Error").Error()
+		os.Exit(1)
 	}
 
-	
+	if err := app.Load(); err != nil {
+		fmt.Println("Warning loading app state:", err)
+	}
 
-		systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
+	// Autostart Setup
+	exe, _ := os.Executable()
+	startupApp := &autostart.App{
+		Name: "PureLink",
+		Exec: []string{exe},
+	}
 
-		mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", cfg.TotalCleaned), "Total items processed")
+	systray.AddMenuItem("Status: Active", "Protection is enabled").Disable()
+	mCounter := systray.AddMenuItem(fmt.Sprintf("Cleaned: %d Links", app.Config.TotalCleaned), "Total items processed")
+	systray.AddSeparator()
 
-	
+	// --- Recent History ---
+	mHistory := systray.AddMenuItem("Recent History", "Last 5 cleaned links")
+	var mHistoryItems []*systray.MenuItem
 
-		systray.AddSeparator()
+	for i := 0; i < 5; i++ {
+		item := mHistory.AddSubMenuItem(fmt.Sprintf("Item %d", i), "")
+		item.Hide()
+		mHistoryItems = append(mHistoryItems, item)
+	}
 
-	
-
-		// --- Recent History ---
-
-		mHistory := systray.AddMenuItem("Recent History", "Last 5 cleaned links")
-
-		var mHistoryItems []*systray.MenuItem
-
-		for i := 0; i < 5; i++ {
-
-			item := mHistory.AddSubMenuItem(fmt.Sprintf("Item %d", i), "")
-
-			item.Hide()
-
-			mHistoryItems = append(mHistoryItems, item)
-
-		}
-
-	
-
-		// Helper to update history menu
-
-		updateHistoryMenu := func() {
-
-			cfgMutex.Lock()
-
-			defer cfgMutex.Unlock()
-
-			for i, item := range mHistoryItems {
-
-				if i < len(cfg.History) {
-
-					title := cfg.History[i]
-
-					if len(title) > 50 {
-
-						title = title[:47] + "..."
-
-					}
-
-					item.SetTitle(title)
-
-					item.SetTooltip(cfg.History[i])
-
-					item.Show()
-
-				} else {
-
-					item.Hide()
-
-				}
-
-			}
-
-		}
-
-		updateHistoryMenu() // Initial load
-
-	
-
-		// Channel to aggregate history clicks
-
-		historyClicked := make(chan int)
-
+	updateHistoryMenu := func() {
+		app.mu.RLock()
+		defer app.mu.RUnlock()
 		for i, item := range mHistoryItems {
-
-			go func(idx int, m *systray.MenuItem) {
-
-				for range m.ClickedCh {
-
-					historyClicked <- idx
-
+			if i < len(app.Config.History) {
+				title := app.Config.History[i]
+				if len(title) > 50 {
+					title = title[:47] + "..."
 				}
-
-			}(i, item)
-
+				item.SetTitle(title)
+				item.SetTooltip(app.Config.History[i])
+				item.Show()
+			} else {
+				item.Hide()
+			}
 		}
-
-	
-
-		systray.AddSeparator()
-
-	
-
-		// --- Tools Submenu ---
-
-		mTools := systray.AddMenuItem("Tools", "Manual Utilities")
-
-	
-
-		// Added items directly without separators inside the submenu (Library limitation)
-
-		mUpdate := mTools.AddSubMenuItem("Check for Filter Updates", "Download latest tracking rules")
-
-	
-
-		tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
-
-		tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
-
-		tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
-
-		tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
-
-		tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
-
-	
-
-		systray.AddSeparator()
-
-		mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", cfg.Unshorten)
-
-		mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", cfg.WSLMode)
-
-		mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", cfg.DirectLink)
-
-		mStartup := systray.AddMenuItemCheckbox("Run on Startup", "Launch PureLink when system starts", false)
-
-	
-
-		if app.IsEnabled() {
-
-			mStartup.Check()
-
-		} else {
-
-			mStartup.Uncheck()
-
-		}
-
-	
-
-		systray.AddSeparator()
-
-	
-
-		mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", cfg.Sound)
-
-		mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
-
-	
-
-		systray.AddSeparator()
-
-		mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
-
-	
-
-		// Local runtime state (not persisted)
-
-		isRunning := true
-
-	
-
-		// --- Background Watcher ---
-
-		go func() {
-
-			lastText, _ := clipboard.ReadAll()
-
-			for {
-
-				if !isRunning {
-
-					time.Sleep(1 * time.Second)
-
-					continue
-
-				}
-
-	
-
-				text, err := clipboard.ReadAll()
-
-				if err == nil && text != "" && text != lastText {
-
-	
-
-					cfgMutex.Lock()
-
-					cleaned := CleanText(text, cfg.Unshorten, cfg.WSLMode, cfg.DirectLink)
-
-					cfgMutex.Unlock()
-
-	
-
-					if cleaned != text {
-
-						clipboard.WriteAll(cleaned)
-
-						lastText = cleaned
-
-	
-
-						cfgMutex.Lock()
-
-						cfg.TotalCleaned++
-
-												// Update History: Move-to-Front Deduplication
-
-												var newHistory []string
-
-												for _, item := range cfg.History {
-
-													if item != cleaned {
-
-														newHistory = append(newHistory, item)
-
-													}
-
-												}
-
-												cfg.History = append([]string{cleaned}, newHistory...)
-
-												if len(cfg.History) > 5 {
-
-													cfg.History = cfg.History[:5]
-
-												}
-
-						SaveConfig(cfg) // Auto-save on count change
-
-						cfgMutex.Unlock()
-
-	
-
-						mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", cfg.TotalCleaned))
-
-						updateHistoryMenu()
-
-	
-
-						cfgMutex.Lock()
-
-						playSound := cfg.Sound
-
-						cfgMutex.Unlock()
-
-						if playSound {
-
-							NotifyBeep()
-
-						}
-
-					} else {
-
-						lastText = text
-
-					}
-
-				}
-
-				time.Sleep(500 * time.Millisecond)
-
+	}
+
+	updateHistoryMenu() // Initial load
+
+	// Channel to aggregate history clicks
+	historyClicked := make(chan int)
+	for i, item := range mHistoryItems {
+		go func(idx int, m *systray.MenuItem) {
+			for range m.ClickedCh {
+				historyClicked <- idx
+			}
+		}(i, item)
+	}
+
+	systray.AddSeparator()
+
+	// --- Tools Submenu ---
+	mTools := systray.AddMenuItem("Tools", "Manual Utilities")
+	mUpdate := mTools.AddSubMenuItem("Check for Filter Updates", "Download latest tracking rules")
+	tWhatsApp := mTools.AddSubMenuItem("Open WhatsApp", "Copy link and open WhatsApp")
+	tTelegram := mTools.AddSubMenuItem("Open Telegram", "Copy link and open Telegram")
+	tDecode64 := mTools.AddSubMenuItem("Decode Base64", "Decode Base64 string from clipboard")
+	tEncode64 := mTools.AddSubMenuItem("Encode Base64", "Encode text to Base64")
+	tUUID := mTools.AddSubMenuItem("Insert UUID", "Generate and copy a new UUID")
+
+	systray.AddSeparator()
+	mUnshorten := systray.AddMenuItemCheckbox("Unshorten Links", "Expand short URLs (Requires Internet)", app.Config.Unshorten)
+	mWSL := systray.AddMenuItemCheckbox("WSL Path Mode", "Convert C:\\ to /mnt/c/ and fix slashes", app.Config.WSLMode)
+	mCloudBoost := systray.AddMenuItemCheckbox("Direct Link", "Auto-convert Dropbox/Drive links", app.Config.DirectLink)
+	mStartup := systray.AddMenuItemCheckbox("Run on Startup", "Launch PureLink when system starts", false)
+
+	if startupApp.IsEnabled() {
+		mStartup.Check()
+	} else {
+		mStartup.Uncheck()
+	}
+
+	systray.AddSeparator()
+	mSound := systray.AddMenuItemCheckbox("Play Sound", "Beep when item is cleaned", app.Config.Sound)
+	mPause := systray.AddMenuItem("Pause Protection", "Temporarily stop cleaning")
+	systray.AddSeparator()
+	mQuit := systray.AddMenuItem("Quit", "Exit PureLink")
+
+	isRunning := true
+
+	// --- Background Clipboard Watcher ---
+	go func() {
+		lastText, _ := clipboard.ReadAll()
+		for {
+			if !isRunning {
+				time.Sleep(1 * time.Second)
+				continue
 			}
 
-		}()
+			text, err := clipboard.ReadAll()
+			if err == nil && text != "" && text != lastText {
+				app.mu.RLock()
+				unshorten := app.Config.Unshorten
+				wslMode := app.Config.WSLMode
+				directLink := app.Config.DirectLink
+				app.mu.RUnlock()
 
-	
+				cleaned := app.CleanText(text, unshorten, wslMode, directLink)
 
-		// --- Event Handler ---
+				if cleaned != text {
+					clipboard.WriteAll(cleaned)
+					lastText = cleaned
 
-		go func() {
+					app.mu.Lock()
+					app.Config.TotalCleaned++
 
-			for {
-
-				select {
-
-				case <-mQuit.ClickedCh:
-
-					systray.Quit()
-
-	
-
-				case <-mPause.ClickedCh:
-
-					if isRunning {
-
-						isRunning = false
-
-						mPause.SetTitle("Resume Protection")
-
-						systray.SetTooltip("PureLink (Paused)")
-
-					} else {
-
-						isRunning = true
-
-						mPause.SetTitle("Pause Protection")
-
-						systray.SetTooltip("PureLink (Active)")
-
-					}
-
-	
-
-				case idx := <-historyClicked:
-
-					cfgMutex.Lock()
-
-					if idx < len(cfg.History) {
-
-						clipboard.WriteAll(cfg.History[idx])
-
-						if cfg.Sound {
-
-							NotifyBeep()
-
+					var newHistory []string
+					for _, item := range app.Config.History {
+						if item != cleaned {
+							newHistory = append(newHistory, item)
 						}
-
 					}
+					app.Config.History = append([]string{cleaned}, newHistory...)
+					if len(app.Config.History) > 5 {
+						app.Config.History = app.Config.History[:5]
+					}
+					app.writeConfigFile()
+					app.mu.Unlock()
 
-					cfgMutex.Unlock()
+					mCounter.SetTitle(fmt.Sprintf("Cleaned: %d Items", app.Config.TotalCleaned))
+					updateHistoryMenu()
 
-	
-
-				case <-mSound.ClickedCh:
-
-					cfgMutex.Lock()
-
-					if cfg.Sound {
-
-						cfg.Sound = false
-
-						mSound.Uncheck()
-
-					} else {
-
-						cfg.Sound = true
-
-						mSound.Check()
-
+					app.mu.RLock()
+					playSound := app.Config.Sound
+					app.mu.RUnlock()
+					if playSound {
 						NotifyBeep()
-
 					}
+				} else {
+					lastText = text
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
 
-					SaveConfig(cfg)
+	// --- Event Handler ---
+	go func() {
+		for {
+			select {
+			case <-mQuit.ClickedCh:
+				systray.Quit()
 
-					cfgMutex.Unlock()
+			case <-mPause.ClickedCh:
+				if isRunning {
+					isRunning = false
+					mPause.SetTitle("Resume Protection")
+					systray.SetTooltip("PureLink (Paused)")
+				} else {
+					isRunning = true
+					mPause.SetTitle("Pause Protection")
+					systray.SetTooltip("PureLink (Active)")
+				}
 
-	
-
-				case <-mUnshorten.ClickedCh:
-
-					cfgMutex.Lock()
-
-					if cfg.Unshorten {
-
-						cfg.Unshorten = false
-
-						mUnshorten.Uncheck()
-
-					} else {
-
-						cfg.Unshorten = true
-
-						mUnshorten.Check()
-
+			case idx := <-historyClicked:
+				app.mu.RLock()
+				if idx < len(app.Config.History) {
+					clipboard.WriteAll(app.Config.History[idx])
+					if app.Config.Sound {
 						NotifyBeep()
-
 					}
-
-					SaveConfig(cfg)
-
-					cfgMutex.Unlock()
-
-	
-
-				case <-mWSL.ClickedCh:
-
-					cfgMutex.Lock()
-
-					if cfg.WSLMode {
-
-						cfg.WSLMode = false
-
-						mWSL.Uncheck()
-
-					} else {
-
-						cfg.WSLMode = true
-
-						mWSL.Check()
-
-						NotifyBeep()
-
-					}
-
-					SaveConfig(cfg)
-
-					cfgMutex.Unlock()
-
-	
-
-				case <-mCloudBoost.ClickedCh:
-
-					cfgMutex.Lock()
-
-					if cfg.DirectLink {
-
-						cfg.DirectLink = false
-
-						mCloudBoost.Uncheck()
-
-					} else {
-
-						cfg.DirectLink = true
-
-						mCloudBoost.Check()
-
-						NotifyBeep()
-
-					}
-
-					SaveConfig(cfg)
-
-					cfgMutex.Unlock()
-
-	
-
-				case <-mStartup.ClickedCh:
-
-					if app.IsEnabled() {
-
-						if err := app.Disable(); err != nil {
-
-							dialog.Message("Failed to disable startup: %v", err).Title("Error").Error()
-
-						} else {
-
-							mStartup.Uncheck()
-
-							dialog.Message("PureLink will no longer run on startup.").Title("Startup Disabled").Info()
-
-							NotifyBeep()
-
-						}
-
-					} else {
-
-						if err := app.Enable(); err != nil {
-
-							dialog.Message("Failed to enable startup: %v", err).Title("Error").Error()
-
-						} else {
-
-							mStartup.Check()
-
-							dialog.Message("PureLink will now run automatically when you log in.").Title("Startup Enabled").Info()
-
-							NotifyBeep()
-
-						}
-
-					}
-
-	
-
-				// --- Tools Actions ---
-
-	
-
-				case <-mUpdate.ClickedCh:
-
-					err := UpdateFilters()
-
-					if err != nil {
-
-						dialog.Message("Update failed: %v", err).Title("Error").Error()
-
-					} else {
-
-						dialog.Message("Filters updated successfully!").Title("Success").Info()
-
-						NotifyBeep()
-
-					}
-
-	
-
-				case <-tWhatsApp.ClickedCh:
-
-					text, _ := clipboard.ReadAll()
-
-					url, err := GetWhatsAppLink(text)
-
-					if err == nil {
-
-						clipboard.WriteAll(url)
-
-						OpenBrowser(url)
-
-						NotifyBeep()
-
-					}
-
-	
-
-				case <-tTelegram.ClickedCh:
-
-					text, _ := clipboard.ReadAll()
-
-					url, err := GetTelegramLink(text)
-
-					if err == nil {
-
-						clipboard.WriteAll(url)
-
-						OpenBrowser(url)
-
-						NotifyBeep()
-
-					}
-
-	
-
-				case <-tDecode64.ClickedCh:
-
-					text, _ := clipboard.ReadAll()
-
-					decoded, err := DecodeBase64(text)
-
-					if err == nil && decoded != "" {
-
-						clipboard.WriteAll(decoded)
-
-						NotifyBeep()
-
-					}
-
-	
-
-				case <-tEncode64.ClickedCh:
-
-					text, _ := clipboard.ReadAll()
-
-					if text != "" {
-
-						encoded := EncodeBase64(text)
-
-						clipboard.WriteAll(encoded)
-
-						NotifyBeep()
-
-					}
-
-	
-
-				case <-tUUID.ClickedCh:
-
-					id := GenerateUUID()
-
-					clipboard.WriteAll(id)
-
+				}
+				app.mu.RUnlock()
+
+			case <-mSound.ClickedCh:
+				app.mu.Lock()
+				if app.Config.Sound {
+					app.Config.Sound = false
+					mSound.Uncheck()
+				} else {
+					app.Config.Sound = true
+					mSound.Check()
 					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
 
+			case <-mUnshorten.ClickedCh:
+				app.mu.Lock()
+				if app.Config.Unshorten {
+					app.Config.Unshorten = false
+					mUnshorten.Uncheck()
+				} else {
+					app.Config.Unshorten = true
+					mUnshorten.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mWSL.ClickedCh:
+				app.mu.Lock()
+				if app.Config.WSLMode {
+					app.Config.WSLMode = false
+					mWSL.Uncheck()
+				} else {
+					app.Config.WSLMode = true
+					mWSL.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mCloudBoost.ClickedCh:
+				app.mu.Lock()
+				if app.Config.DirectLink {
+					app.Config.DirectLink = false
+					mCloudBoost.Uncheck()
+				} else {
+					app.Config.DirectLink = true
+					mCloudBoost.Check()
+					NotifyBeep()
+				}
+				app.writeConfigFile()
+				app.mu.Unlock()
+
+			case <-mStartup.ClickedCh:
+				if startupApp.IsEnabled() {
+					if err := startupApp.Disable(); err != nil {
+						dialog.Message("Failed to disable startup: %v", err).Title("Error").Error()
+					} else {
+						mStartup.Uncheck()
+						dialog.Message("PureLink will no longer run on startup.").Title("Startup Disabled").Info()
+						NotifyBeep()
+					}
+				} else {
+					if err := startupApp.Enable(); err != nil {
+						dialog.Message("Failed to enable startup: %v", err).Title("Error").Error()
+					} else {
+						mStartup.Check()
+						dialog.Message("PureLink will now run automatically when you log in.").Title("Startup Enabled").Info()
+						NotifyBeep()
+					}
 				}
 
-			}
+			// --- Tools Actions ---
+			case <-mUpdate.ClickedCh:
+				err := app.UpdateFilters()
+				if err != nil {
+					dialog.Message("Update failed: %v", err).Title("Error").Error()
+				} else {
+					dialog.Message("Filters updated successfully!").Title("Success").Info()
+					NotifyBeep()
+				}
 
-		}()
-	} // Close onReady
+			case <-tWhatsApp.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				url, err := GetWhatsAppLink(text)
+				if err == nil {
+					clipboard.WriteAll(url)
+					OpenBrowser(url)
+					NotifyBeep()
+				}
+
+			case <-tTelegram.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				url, err := GetTelegramLink(text)
+				if err == nil {
+					clipboard.WriteAll(url)
+					OpenBrowser(url)
+					NotifyBeep()
+				}
+
+			case <-tDecode64.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				decoded, err := DecodeBase64(text)
+				if err == nil && decoded != "" {
+					clipboard.WriteAll(decoded)
+					NotifyBeep()
+				}
+
+			case <-tEncode64.ClickedCh:
+				text, _ := clipboard.ReadAll()
+				if text != "" {
+					encoded := EncodeBase64(text)
+					clipboard.WriteAll(encoded)
+					NotifyBeep()
+				}
+
+			case <-tUUID.ClickedCh:
+				id := GenerateUUID()
+				clipboard.WriteAll(id)
+				NotifyBeep()
+			}
+		}
+	}()
+}
 
 func onExit() {}

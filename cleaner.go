@@ -8,23 +8,19 @@ import (
 	"unicode"
 )
 
-// CleanText processes input for Privacy, Cloud links, and Path normalization.
-func CleanText(input string, unshorten bool, wslMode bool, cloudBoost bool) string {
+func (app *App) CleanText(input string, unshorten bool, wslMode bool, cloudBoost bool) string {
 	trimmed := strings.TrimSpace(input)
 
-	// 1. Path Detection
 	if isWindowsPath(trimmed) {
 		return processPath(trimmed, wslMode)
 	}
 
-	// 2. URL Cleaning
 	if !strings.HasPrefix(trimmed, "http") {
 		return input
 	}
 
 	finalURL := trimmed
 
-	// Unshorten logic
 	if unshorten && isShortLink(trimmed) {
 		resolved := resolveURL(trimmed)
 		if resolved != "" && resolved != trimmed {
@@ -37,30 +33,23 @@ func CleanText(input string, unshorten bool, wslMode bool, cloudBoost bool) stri
 		return finalURL
 	}
 
-	// Remove tracking parameters using dynamic blocklist
-	BlocklistLock.RLock()
-	currentParams := ActiveBlocklist
-	BlocklistLock.RUnlock()
+	params := app.GetRules()
 
 	q := u.Query()
-	for _, param := range currentParams {
+	for _, param := range params {
 		q.Del(param)
 	}
 
-	// Fix YouTube Shorts
 	if strings.Contains(u.Host, "youtube.com") && strings.Contains(u.Path, "/shorts/") {
 		videoID := strings.TrimPrefix(u.Path, "/shorts/")
 		u.Path = "/watch"
 		q.Set("v", videoID)
 	}
 
-	// 3. Cloud Booster (Dropbox & Google Drive)
 	if cloudBoost {
-		// Automatically convert to direct download links
 		if strings.Contains(u.Host, "dropbox.com") {
 			q.Set("dl", "1")
 		} else if strings.Contains(u.Host, "drive.google.com") && strings.Contains(u.Path, "/view") {
-			// Convert /file/d/ID/view -> /uc?export=download&id=ID
 			parts := strings.Split(u.Path, "/")
 			for i, part := range parts {
 				if part == "d" && i+1 < len(parts) {
@@ -94,7 +83,6 @@ func processPath(input string, wslMode bool) string {
 		}
 	}
 
-	// Smart Quoting
 	if strings.Contains(clean, " ") {
 		return "\"" + clean + "\""
 	}
@@ -146,7 +134,7 @@ func isShortLink(input string) bool {
 		"buff.ly", "amzn.to", "lnkd.in", "rebrand.ly", "shrtco.de",
 	}
 	for _, s := range shorteners {
-		if u.Host == s || strings.HasSuffix(u.Host, s) {
+		if u.Host == s || strings.HasSuffix(u.Host, "."+s) {
 			return true
 		}
 	}

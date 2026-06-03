@@ -16,43 +16,28 @@ type Config struct {
 
 const configFileName = "purelink_config.json"
 
-func LoadConfig() (*Config, error) {
-	// Default config
-	cfg := &Config{
-		Unshorten:    false,
-		WSLMode:      false,
-		DirectLink:   true,
-		Sound:        true,
-		TotalCleaned: 0,
-		History:      []string{},
-	}
-
-	file, err := os.Open(configFileName)
+func (app *App) loadConfigFile() error {
+	file, err := os.Open(app.configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return cfg, nil // Return default if file doesn't exist
+			return nil
 		}
-		return nil, err
+		return err
 	}
 	defer file.Close()
-
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(cfg)
-	if err != nil {
-		return cfg, nil // Return default/partial on error, or handle differently
+	if err := json.NewDecoder(file).Decode(app.Config); err != nil {
+		return nil
 	}
-
-	return cfg, nil
+	return nil
 }
 
-func SaveConfig(cfg *Config) error {
-	file, err := os.Create(configFileName)
+func (app *App) writeConfigFile() error {
+	file, err := os.Create(app.configPath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(cfg)
+	return encoder.Encode(app.Config)
 }
